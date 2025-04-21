@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block title %}Koszyk{% endblock %}
+{% block content %}
+<h1>Twój Koszyk</h1>
+
+{% if cart_items %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Produkt</th>
+            <th>Ilość</th>
+            <th>Cena jednostkowa</th>
+            <th>Suma</th>
+            <th>Akcja</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in cart_items %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ "%.2f"|format(item.price) }} zł</td>
+            <td>{{ "%.2f"|format(item.total) }} zł</td>
+            <td>
+                <form method="POST" action="{{ url_for('remove_from_cart', dish_id=item.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="3" class="text-end"><strong>Suma:</strong></td>
+            <td><strong>{{ "%.2f"|format(total_price) }} zł</strong></td>
+            <td></td>
+        </tr>
+    </tfoot>
+</table>
+
+<div class="text-end">
+    <form method="POST" action="{{ url_for('checkout') }}">
+        <button type="submit" class="btn btn-success btn-lg">Przejdź do płatności (Złóż zamówienie)</button>
+    </form>
+</div>
+
+{% else %}
+<p>Twój koszyk jest pusty.</p>
+<p><a href="{{ url_for('index') }}">Przeglądaj restauracje</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}Znajdź Restaurację - PapuGO{% endblock %}
+
+{% block content %}
+    <div class="p-4 mb-4 bg-light rounded-3 shadow-sm"> <div class="container-fluid py-3">
+        <h1 class="display-6 fw-bold">{% if search_query %}Wyniki dla: "{{ search_query }}"{% else %}Zamów jedzenie z najlepszych restauracji!{% endif %}</h1>
+        <p class="col-md-8 fs-5">Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej.</p>
+         {% if search_query and not restaurants %}
+         <a href="{{ url_for('index') }}" class="btn btn-success btn-lg" type="button">Wyczyść wyszukiwanie</a>
+         {% endif %}
+      </div>
+    </div>
+
+    {% if restaurants %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"> {% for restaurant in restaurants %}
+            <div class="col">
+                <a href="{{ url_for('restaurant_detail', restaurant_id=restaurant.RestaurantID) }}" class="text-decoration-none"> <div class="card restaurant-card shadow-sm"> <img src="{{ url_for('uploaded_file', filename=restaurant.ImageURL if restaurant.ImageURL else 'placeholder_restaurant.png') }}" class="card-img-top" alt="{{ restaurant.Name }}">
+                        <div class="card-body">
+                            <div> <h5 class="card-title mb-1">{{ restaurant.Name }}</h5>
+                                {% if restaurant.CuisineType %}
+                                <p class="card-text text-muted mb-2"><small><i class="bi bi-tags-fill me-1"></i>{{ restaurant.CuisineType }}</small></p>
+                                {% endif %}
+                                {% if restaurant.FullAddress != 'Brak adresu' %}
+                                <p class="card-text mb-3"><small><i class="bi bi-geo-alt-fill me-1"></i>{{ restaurant.FullAddress }}</small></p>
+                                {% endif %}
+                            </div>
+                            </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    {% elif search_query %}
+         <div class="alert alert-warning" role="alert">
+           Nie znaleziono restauracji pasujących do Twojego wyszukiwania: "{{ search_query }}". Spróbuj innej frazy.
+         </div>
+    {% else %}
+         <div class="alert alert-info" role="alert">
+           Obecnie nie ma żadnych restauracji w systemie. Administrator wkrótce je doda!
+         </div>
+    {% endif %}
+{% endblock %}

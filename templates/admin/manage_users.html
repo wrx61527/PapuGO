@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block title %}Zarządzaj Użytkownikami{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Zarządzaj Użytkownikami</h1>
+
+    {% if users %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>ID Użytkownika</th>
+                    <th>Nazwa użytkownika</th>
+                    <th>Typ konta</th>
+                    </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.UserID }}</td>
+                    <td>{{ user.Username }}</td>
+                    <td>
+                        {% if user.IsAdmin %}
+                            <span class="badge bg-danger">Administrator</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Użytkownik</span>
+                        {% endif %}
+                    </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        Brak zarejestrowanych użytkowników (oprócz konta administratora).
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Powrót do Panelu Admina</a>
+</div>
+{% endblock %}

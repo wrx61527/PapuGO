@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block title %}Panel Administratora{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Panel Administratora</h1>
+    <p>Witaj w panelu zarządzania systemem zamówień PapuGO.</p>
+
+    <div class="list-group">
+        <a href="{{ url_for('manage_restaurants') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-shop me-2"></i> Zarządzaj Restauracjami
+        </a>
+        <a href="{{ url_for('manage_dishes') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-egg-fried me-2"></i> Zarządzaj Daniami
+        </a>
+        <a href="{{ url_for('manage_users') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-people-fill me-2"></i> Zarządzaj Użytkownikami
+        </a>
+        <a href="{{ url_for('view_orders') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-card-list me-2"></i> Przeglądaj Zamówienia
+        </a>
+    </div>
+
+    <a href="{{ url_for('index') }}" class="btn btn-secondary mt-4">Wróć do strony głównej</a>
+</div>
+
+{% endblock %}

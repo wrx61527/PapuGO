@@ -1,0 +1,105 @@
+/* static/css/custom.css */
+
+:root {
+    --primary-green: #198754; /* Główny zielony Bootstrapa (Success) */
+    --light-green: #d1e7dd; /* Jaśniejszy zielony tła (Success alert) */
+    --dark-green: #0f5132; /* Ciemniejszy zielony tekstu (Success alert) */
+  }
+  
+  body {
+    padding-top: 70px; /* Zwiększony padding pod wyższy navbar z logo */
+    background-color: #f8f9fa; /* Jasnoszare tło dla kontrastu */
+  }
+  
+  /* Zielony Navbar */
+  .navbar-custom {
+    background-color: var(--primary-green);
+    border-bottom: 3px solid var(--dark-green); /* Dodaje akcent */
+  }
+  
+  .navbar-custom .navbar-brand,
+  .navbar-custom .nav-link {
+    color: white; /* Biały tekst na zielonym tle */
+  }
+  
+  .navbar-custom .nav-link:hover,
+  .navbar-custom .nav-link:focus {
+    color: #e9ecef; /* Jaśniejszy biały przy najechaniu */
+  }
+  
+  .navbar-custom .navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.3); /* Jaśniejsza ramka przycisku menu */
+  }
+  
+  .navbar-custom .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  }
+  
+  /* Styl dla logo w navbarze */
+  .navbar-brand img.logo {
+    max-height: 40px; /* Dostosuj wysokość logo */
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  
+  /* Kafelki/Karty Restauracji */
+  .restaurant-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: none; /* Usunięcie domyślnej ramki karty */
+    border-radius: 0.5rem; /* Lekko zaokrąglone rogi */
+    overflow: hidden; /* Aby obrazek nie wychodził poza zaokrąglenie */
+    height: 100%; /* Aby karty w rzędzie miały równą wysokość */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .restaurant-card:hover {
+    transform: translateY(-5px); /* Lekkie uniesienie karty */
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); /* Cień przy najechaniu */
+  }
+  
+  .restaurant-card .card-img-top {
+    height: 180px; /* Stała wysokość obrazka */
+    object-fit: cover; /* Skalowanie obrazka, aby wypełnił przestrzeń */
+  }
+  
+  .restaurant-card .card-body {
+     flex-grow: 1; /* Rozciąga body karty, aby przycisk był na dole */
+     display: flex;
+     flex-direction: column;
+     justify-content: space-between; /* Wypycha tytuł/opis od przycisku */
+  }
+  
+   .restaurant-card .card-title {
+      color: var(--dark-green); /* Ciemnozielony tytuł */
+   }
+  
+   .restaurant-card .card-text {
+      font-size: 0.9rem;
+      color: #6c757d; /* Szary tekst opisu/adresu */
+   }
+  
+   /* Poprawki dla przycisków i linków */
+   .btn-primary {
+     background-color: var(--primary-green);
+     border-color: var(--primary-green);
+   }
+   .btn-primary:hover {
+      background-color: var(--dark-green);
+      border-color: var(--dark-green);
+   }
+  
+   a {
+     color: var(--primary-green);
+   }
+   a:hover {
+      color: var(--dark-green);
+   }
+  
+  /* Stopka */
+  .footer {
+      padding: 1.5rem 0;
+      background-color: #e9ecef; /* Jaśniejsza stopka */
+      margin-top: 3rem;
+      border-top: 1px solid #dee2e6;
+  }

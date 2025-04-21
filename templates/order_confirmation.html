@@ -1,0 +1,8 @@
+{% extends "layout.html" %}
+{% block title %}Zamówienie złożone{% endblock %}
+{% block content %}
+<h1>Dziękujemy za złożenie zamówienia!</h1>
+<p>Twoje zamówienie o numerze <strong>#{{ order_id }}</strong> zostało przyjęte.</p>
+<p>Możesz śledzić status zamówienia na swoim koncie (funkcjonalność do dodania).</p>
+<p><a href="{{ url_for('index') }}" class="btn btn-primary">Wróć na stronę główną</a></p>
+{% endblock %}
