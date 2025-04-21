@@ -11,8 +11,6 @@ from flask import (
     send_from_directory, abort
 )
 
-print(pyodbc.drivers())
-
 # --- Konfiguracja Początkowa ---
 load_dotenv()
 app = Flask(__name__)
@@ -43,7 +41,8 @@ def get_db_connection():
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]; error_message = f"Błąd połączenia pyodbc (SQLSTATE: {sqlstate}): {ex}"
         app.logger.error(error_message)
-        flash(f"Szczegółowy błąd DB (pyodbc): {ex}", "danger") # Flash diagnostyczny
+        flash(f"Szczegółowy błąd DB (pyodbc): {ex}", "danger") 
+        flash(print(pyodbc.drivers())) # Flash diagnostyczny
     except Exception as e:
         error_message = f"Nieoczekiwany błąd połączenia pyodbc: {e}"; app.logger.error(error_message)
         flash(f"Nieoczekiwany błąd połączenia: {e}", "danger") # Flash diagnostyczny
