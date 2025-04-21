@@ -11,6 +11,8 @@ from flask import (
     send_from_directory, abort
 )
 
+print(pyodbc.drivers())
+
 # --- Konfiguracja Początkowa ---
 load_dotenv()
 app = Flask(__name__)
