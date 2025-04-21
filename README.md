@@ -1,13 +1,13 @@
 Projekt systemu zamówień dla restauracji PapuGO
+https://papugo.azurewebsites.net
 
 Projektowane moduły:
 
 Frontend:
-1. Rejestracja i logowanie (integracja z zewnętrzną bazą danych w AZURE)
-2. Wybór restauracji i dań (integracja z zewnętrzną bazą danych w AZURE)
-3. Wyszukiwarka restauracji (integracja z zewnętrzną bazą danych w AZURE)
-4. System koszyka zamówień (wybór ilości dań i płatność)
-5. Strona potwierdzenia zamówienia (integracja z zewnętrzną bazą danych w AZURE)
+1. Prosta rejestracja i logowanie z uprawnieniami - zwykły użytkownik i administrator.
+2. Wyszukiwarka restauracji, rodzaju kuchni, dań
+3. Przegląd menu restauracji (kafelkowy)
+4. System koszyka zamówień (wybór ilości dań i zamówienie)
 
 Backend:
 1. Logowanie administratora (przykładowe konto admin / test1234) (integracja z zewnętrzną bazą danych w AZURE)
