@@ -20,7 +20,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Klucz sesji
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'J6QuuwwBz70xxOtmFLeNbmxiKCbuOka2VD')
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'domyslny_bardzo_tajny_klucz_do_zmiany_natychmiast')
 
 # Konfiguracja Bazy Danych
 connection_string = os.getenv('DATABASE_CONNECTION_STRING')
@@ -49,19 +49,29 @@ def get_db_connection():
     """Nawiązuje połączenie z bazą danych Azure SQL."""
     if not connection_string:
          app.logger.error("Próba połączenia z bazą bez connection stringa.")
+         # Dodano flash dla diagnostyki
+         flash("Błąd krytyczny: Brak skonfigurowanego connection stringa w środowisku aplikacji!", "danger")
          return None
     try:
-        # Ustawienie kodowania na utf-8 dla połączenia
         conn = pyodbc.connect(connection_string, encoding='utf-8')
-        # Opcjonalnie: ustawienie autocommit na False dla lepszej kontroli transakcji
-        # conn.autocommit = False
+        app.logger.debug("Połączenie z bazą danych nawiązane pomyślnie.") # Debug log
         return conn
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]
-        app.logger.error(f"Błąd połączenia z bazą danych (SQLSTATE: {sqlstate}): {ex}")
+        error_message = f"Błąd połączenia z bazą danych (SQLSTATE: {sqlstate}): {ex}"
+        app.logger.error(error_message)
+        # --- MODYFIKACJA DIAGNOSTYCZNA ---
+        # Wyświetl szczegółowy błąd użytkownikowi
+        flash(f"Szczegółowy błąd DB (pyodbc): {ex}", "danger")
+        # --- KONIEC MODYFIKACJI ---
     except Exception as e:
-        app.logger.error(f"Nieoczekiwany błąd połączenia z bazą danych: {e}")
-    return None
+        error_message = f"Nieoczekiwany błąd połączenia z bazą danych: {e}"
+        app.logger.error(error_message)
+        # --- MODYFIKACJA DIAGNOSTYCZNA ---
+        # Wyświetl szczegółowy błąd użytkownikowi
+        flash(f"Szczegółowy błąd DB (inny): {e}", "danger")
+        # --- KONIEC MODYFIKACJI ---
+    return None # Zwróć None jeśli wystąpił jakikolwiek błąd połączenia
 
 def allowed_file(filename):
     """Sprawdza, czy rozszerzenie pliku jest dozwolone."""
