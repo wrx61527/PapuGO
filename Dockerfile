@@ -1,21 +1,16 @@
-# Użyj lekkiego obrazu z Pythonem
-FROM python:3.9-slim
+FROM python:3.11-slim
 
-# Ustaw katalog roboczy
+# Ustawienie katalogu roboczego
 WORKDIR /app
 
-# Skopiuj requirements i zainstaluj zależności
-COPY requirements.txt .
+# Skopiowanie plików aplikacji
+COPY . /app
+
+# Instalacja zależności
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Skopiuj cały kod aplikacji
-COPY . .
-
-# Otwórz port wymagany przez App Runner
-EXPOSE 8080
-
-# Zmienna środowiskowa portu (na wszelki wypadek)
+# Ustawienie portu
 ENV PORT=8080
 
-# Komenda startowa
+# Polecenie startowe
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
