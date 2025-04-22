@@ -3,20 +3,25 @@ version: 1.0
 runtime: python3
 
 build:
-  # Komendy muszą być w formie listy
   commands:
-    - pip install --no-cache-dir -r requirements.txt
+    build:
+      - pip install --no-cache-dir -r requirements.txt
 
-start:
-  command: gunicorn --bind 0.0.0.0:$PORT app:app
-  port: 8080
-
-environment:
-  variables:
-    DB_HOST: papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com
-    DB_PORT: "5432"
-    DB_NAME: papugo
-    DB_USER: papugoadmin
-    FLASK_SECRET_KEY: y9KzjYV6efkUdLnb3V8k
+run:
+  command: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
+  network:
+    port: 8080
+  env:
+    - name: DB_HOST
+      value: papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com
+    - name: DB_PORT
+      value: "5432"
+    - name: DB_NAME
+      value: papugo
+    - name: DB_USER
+      value: papugoadmin
+    - name: FLASK_SECRET_KEY
+      value: y9KzjYV6efkUdLnb3V8k
   secrets:
-    DB_PASSWORD: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp
+    - name: DB_PASSWORD
+      value-from: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp
