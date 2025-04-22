@@ -1,0 +1,27 @@
+version: 1.0 # Wersja specyfikacji apprunner.yaml
+
+build:
+  dockerfile: ./Dockerfile
+
+run:
+
+  command: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
+  port: 8080 
+  network:
+    port: 8080
+
+  runtime_environment_variables:
+    - name: DB_HOST
+      value: "papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com" 
+    - name: DB_PORT
+      value: "5432"
+    - name: DB_NAME
+      value: "papugo-db"
+    - name: DB_USER
+      value: "papugoadmin" 
+    - name: FLASK_SECRET_KEY
+      value: "y9KzjYV6efkUdLnb3V8k"
+
+  runtime_environment_secrets:
+    - name: DB_PASSWORD 
+      value: "arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp"
