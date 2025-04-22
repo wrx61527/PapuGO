@@ -3,8 +3,9 @@ version: 1.0
 runtime: python3
 
 build:
-  # pojedynczy ciąg komend (nie lista)
-  commands: pip install --no-cache-dir -r requirements.txt
+  # Komendy muszą być w formie listy
+  commands:
+    - pip install --no-cache-dir -r requirements.txt
 
 start:
   command: gunicorn --bind 0.0.0.0:$PORT app:app
