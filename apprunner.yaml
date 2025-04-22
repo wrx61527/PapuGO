@@ -16,7 +16,7 @@ run:
     - name: DB_PORT
       value: "5432"
     - name: DB_NAME
-      value: "papugo-db"
+      value: "papugo"
     - name: DB_USER
       value: "papugoadmin" 
     - name: FLASK_SECRET_KEY
