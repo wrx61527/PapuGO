@@ -8,7 +8,7 @@ build:
       - pip install --no-cache-dir -r requirements.txt
 
 run:
-  command: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
+  startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
   network:
     port: 8080
   env:
