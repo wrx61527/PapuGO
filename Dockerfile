@@ -1,27 +1,21 @@
-# Krok 1: Wybierz obraz bazowy Python (np. Python 3.10 na Debian 11 Bullseye)
-FROM python:3.10-slim-bullseye
+# Użyj lekkiego obrazu z Pythonem
+FROM python:3.9-slim
 
-# Ustaw etykiety (opcjonalne)
-LABEL maintainer="Patryk <pilecki.p@icloud.com>"
-LABEL description="Aplikacja Flask z połączeniem do RDS PostgreSQL"
-
-# Ustaw zmienne środowiskowe
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1 # Zalecane dla logów w kontenerach
-
-# Krok 2: Skonfiguruj środowisko aplikacji
+# Ustaw katalog roboczy
 WORKDIR /app
 
-# Skopiuj najpierw plik zależności, aby wykorzystać cache warstw Dockera
+# Skopiuj requirements i zainstaluj zależności
 COPY requirements.txt .
-
-# Zainstaluj zależności Python (w tym psycopg2-binary)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Skopiuj resztę kodu aplikacji do obrazu
+# Skopiuj cały kod aplikacji
 COPY . .
 
-# Krok 3: Zdefiniuj, jak uruchomić aplikację
-# Użyj Gunicorn (lub innego serwera WSGI). Nasłuchuj na porcie podanym przez App Runner ($PORT).
-# Dostosuj 'app:app' jeśli Twój plik/zmienna Flask nazywa się inaczej.
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "--threads", "4", "--timeout", "60", "app:app"]
+# Otwórz port wymagany przez App Runner
+EXPOSE 8080
+
+# Zmienna środowiskowa portu (na wszelki wypadek)
+ENV PORT=8080
+
+# Komenda startowa
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
