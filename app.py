@@ -51,7 +51,8 @@ def get_db_connection():
             database=db_name,
             user=db_user,
             password=db_password,
-            port=db_port
+            port=db_port,
+            sslmode="require"
         )
         current_app.logger.debug("Połączenie psycopg2 nawiązane.")
         return conn
