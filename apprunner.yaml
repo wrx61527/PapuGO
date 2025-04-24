@@ -3,19 +3,15 @@ version: "1.0"
 runtime: python3
 
 build:
-  # lista poleceń instalacyjnych
   commands:
     - pip install --no-cache-dir -r requirements.txt
 
 run:
-  # bindujemy się do zmiennej PORT, którą App Runner dostarcza w czasie runtime
   command: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
 
-  # health‐check i routing zawsze patrzą na 8080
   network:
     port: 8080
 
-  # Twoje zmienne
   env:
     - name: DB_HOST
       value: papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com
@@ -28,7 +24,6 @@ run:
     - name: FLASK_SECRET_KEY
       value: y9KzjYV6efkUdLnb3V8k
 
-  # Sekret wczytywany z AWS Secrets Manager
   secrets:
     - name: DB_PASSWORD
       valueFrom: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp
