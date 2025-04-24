@@ -4,24 +4,71 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">Panel Administratora</h1>
-    <p>Witaj w panelu zarządzania systemem zamówień PapuGO.</p>
+    <p class="lead mb-4">Witaj w panelu zarządzania systemem zamówień PapuGO.</p>
 
-    <div class="list-group">
-        <a href="{{ url_for('manage_restaurants') }}" class="list-group-item list-group-item-action">
-            <i class="bi bi-shop me-2"></i> Zarządzaj Restauracjami
-        </a>
-        <a href="{{ url_for('manage_dishes') }}" class="list-group-item list-group-item-action">
-            <i class="bi bi-egg-fried me-2"></i> Zarządzaj Daniami
-        </a>
-        <a href="{{ url_for('manage_users') }}" class="list-group-item list-group-item-action">
-            <i class="bi bi-people-fill me-2"></i> Zarządzaj Użytkownikami
-        </a>
-        <a href="{{ url_for('view_orders') }}" class="list-group-item list-group-item-action">
-            <i class="bi bi-card-list me-2"></i> Przeglądaj Zamówienia
-        </a>
-    </div>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        <div class="col">
+            <div class="card h-100 shadow-sm admin-tile">
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-shop display-4 mb-3 text-primary"></i>
+                    <h5 class="card-title">Zarządzaj Restauracjami</h5>
+                    <p class="card-text small">Dodawaj, edytuj lub usuwaj restauracje.</p>
+                    <a href="{{ url_for('manage_restaurants') }}" class="btn btn-primary stretched-link mt-auto">Przejdź <i class="bi bi-arrow-right-short"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card h-100 shadow-sm admin-tile">
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-egg-fried display-4 mb-3 text-success"></i>
+                    <h5 class="card-title">Zarządzaj Daniami</h5>
+                    <p class="card-text small">Przypisuj dania do restauracji, edytuj je.</p>
+                    <a href="{{ url_for('manage_dishes') }}" class="btn btn-success stretched-link mt-auto">Przejdź <i class="bi bi-arrow-right-short"></i></a>
+                </div>
+            </div>
+        </div>
+         <div class="col">
+            <div class="card h-100 shadow-sm admin-tile">
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-card-list display-4 mb-3 text-info"></i>
+                    <h5 class="card-title">Przeglądaj Zamówienia</h5>
+                    <p class="card-text small">Zobacz złożone zamówienia i zarządzaj statusami.</p>
+                    <a href="{{ url_for('view_orders') }}" class="btn btn-info stretched-link mt-auto">Przejdź <i class="bi bi-arrow-right-short"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card h-100 shadow-sm admin-tile">
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-people-fill display-4 mb-3 text-secondary"></i>
+                    <h5 class="card-title">Zarządzaj Użytkownikami</h5>
+                    <p class="card-text small">Przeglądaj zarejestrowanych użytkowników.</p>
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-secondary stretched-link mt-auto">Przejdź <i class="bi bi-arrow-right-short"></i></a>
+                </div>
+            </div>
+        </div>
+        </div>
 
-    <a href="{{ url_for('index') }}" class="btn btn-secondary mt-4">Wróć do strony głównej</a>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mt-5"><i class="bi bi-house-door me-1"></i> Wróć do strony głównej</a>
 </div>
+
+<style>
+/* Opcjonalny styl dla lepszego wyglądu kafelków */
+.admin-tile .card-body {
+    transition: transform 0.2s ease-in-out;
+}
+.admin-tile:hover .card-body {
+    transform: translateY(-5px);
+}
+.admin-tile .stretched-link::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    content: "";
+}
+</style>
 
 {% endblock %}

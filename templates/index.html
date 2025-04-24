@@ -2,12 +2,22 @@
 {% block title %}Znajdź Restaurację - PapuGO{% endblock %}
 
 {% block content %}
-    <div class="p-4 mb-4 bg-light rounded-3 shadow-sm"> <div class="container-fluid py-3">
-        <h1 class="display-6 fw-bold">{% if search_query %}Wyniki dla: "{{ search_query }}"{% else %}Zamów jedzenie z najlepszych restauracji!{% endif %}</h1>
-        <p class="col-md-8 fs-5">Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej.</p>
-         {% if search_query and not restaurants %}
-         <a href="{{ url_for('index') }}" class="btn btn-success btn-lg" type="button">Wyczyść wyszukiwanie</a>
-         {% endif %}
+    <div class="p-4 mb-4 bg-success-subtle text-success-emphasis rounded-3 shadow-sm border border-success-subtle">
+        <div class="container-fluid py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="display-6 fw-bold">
+                    {% if search_query %}Wyniki dla: "{{ search_query }}"{% else %}Zamów jedzenie z najlepszych restauracji!{% endif %}
+                </h1>
+                <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#bannerCollapseContent" aria-expanded="true" aria-controls="bannerCollapseContent">
+                    <i class="bi bi-chevron-up"></i> Zwiń/Rozwiń
+                </button>
+            </div>
+             <div class="collapse show" id="bannerCollapseContent">
+                <p class="col-md-8 fs-5 mt-3">Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej, aby znaleźć coś dla siebie.</p>
+                 {% if search_query and not restaurants %}
+                 <a href="{{ url_for('index') }}" class="btn btn-success btn-lg mt-2" type="button">Wyczyść wyszukiwanie</a>
+                 {% endif %}
+            </div>
       </div>
     </div>
 
