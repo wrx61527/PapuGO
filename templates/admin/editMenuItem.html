@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% block title %}Edytuj Danie{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Edytuj Danie: {{ dish.Name }}</h1>
+
+    <form method="POST" action="{{ url_for('edit_dish', dish_id=dish.DishID) }}" enctype="multipart/form-data">
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Dane Dania
+            </div>
+            <div class="card-body">
+                 <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="restaurant_select" class="form-label">Restauracja*</label>
+                        <select class="form-select" id="restaurant_select" name="restaurant_id" required>
+                            <option value="">-- Wybierz restaurację --</option>
+                            {% for r_id, r_name in restaurants %}
+                            <option value="{{ r_id }}" {% if dish.RestaurantID == r_id %}selected{% endif %}>{{ r_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                     <div class="col-md-6">
+                         <label for="dish_name" class="form-label">Nazwa dania*</label>
+                         <input type="text" class="form-control" id="dish_name" name="name" value="{{ dish.Name }}" required>
+                     </div>
+                 </div>
+                 <div class="row g-3 mb-3">
+                     <div class="col-md-9">
+                         <label for="dish_description" class="form-label">Opis</label>
+                         <input type="text" class="form-control" id="dish_description" name="description" value="{{ dish.Description if dish.Description }}">
+                     </div>
+                     <div class="col-md-3">
+                         <label for="dish_price" class="form-label">Cena (zł)*</label>
+                         <input type="number" step="0.01" class="form-control" id="dish_price" name="price" value="{{ '%.2f'|format(dish.Price) }}" required placeholder="np. 19.99">
+                     </div>
+                 </div>
+                 <div class="row g-3 mb-3">
+                     <div class="col-md-12">
+                         <label for="dish_image" class="form-label">Zmień zdjęcie dania</label>
+                         <input class="form-control" type="file" id="dish_image" name="image" accept="image/png, image/jpeg, image/gif">
+                         {% if dish.ImageURL %}
+                            <div class="mt-2">
+                                <small>Obecne zdjęcie:</small><br>
+                                <img src="{{ url_for('uploaded_file', filename=dish.ImageURL) }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
+                                 <small class="d-block text-muted">{{ dish.ImageURL }}</small>
+                            </div>
+                        {% else %}
+                            <small class="d-block text-muted mt-2">Brak obecnego zdjęcia.</small>
+                        {% endif %}
+                     </div>
+                 </div>
+                 <small class="text-muted">* Pola restauracja, nazwa i cena są wymagane.</small>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            {% set redirect_url = url_for('manage_dishes', restaurant_id=dish.RestaurantID) if dish.RestaurantID else url_for('manage_dishes') %}
+            <a href="{{ redirect_url }}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-1"></i> Anuluj i wróć</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill me-2"></i>Zapisz Zmiany</button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}

@@ -83,7 +83,10 @@
                         <td>{{ dish.Description if dish.Description else '-' }}</td>
                         <td>{{ "%.2f"|format(dish.Price) }}</td>
                         <td>
-                            <form method="POST" action="{{ url_for('manage_dishes', restaurant_id=selected_restaurant_id) }}" style="display: inline;">
+                            <a href="{{ url_for('edit_dish', dish_id=dish.DishID) }}" class="btn btn-warning btn-sm" title="Edytuj danie">
+                                 <i class="bi bi-pencil-fill"></i> Edytuj
+                            </a>
+                            <form method="POST" action="{{ url_for('manage_dishes', restaurant_id=selected_restaurant_id) }}" style="display: inline;" class="ms-1">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="dish_id" value="{{ dish.DishID }}">
                                 <input type="hidden" name="restaurant_id" value="{{ selected_restaurant_id }}">

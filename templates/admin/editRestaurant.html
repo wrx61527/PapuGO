@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% block title %}Edytuj Restaurację{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Edytuj Restaurację: {{ restaurant.Name }}</h1>
+
+    <form method="POST" action="{{ url_for('edit_restaurant', restaurant_id=restaurant.RestaurantID) }}" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="edit"> <div class="card mb-4 shadow-sm">
+            <div class="card-header">
+                Dane Restauracji
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-5">
+                        <label for="name" class="form-label">Nazwa restauracji*</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ restaurant.Name }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cuisine" class="form-label">Rodzaj kuchni</label>
+                        <input type="text" class="form-control" id="cuisine" name="cuisine" value="{{ restaurant.CuisineType if restaurant.CuisineType }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="rest_image" class="form-label">Zmień zdjęcie restauracji</label>
+                        <input class="form-control" type="file" id="rest_image" name="image" accept="image/png, image/jpeg, image/gif">
+                        {% if restaurant.ImageURL %}
+                            <div class="mt-2">
+                                <small>Obecne zdjęcie:</small><br>
+                                <img src="{{ url_for('uploaded_file', filename=restaurant.ImageURL) }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
+                                <small class="d-block text-muted">{{ restaurant.ImageURL }}</small>
+                            </div>
+                        {% else %}
+                            <small class="d-block text-muted mt-2">Brak obecnego zdjęcia.</small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                     <div class="col-md-5">
+                        <label for="street" class="form-label">Ulica</label>
+                        <input type="text" class="form-control" id="street" name="street" value="{{ restaurant.Street if restaurant.Street }}">
+                    </div>
+                     <div class="col-md-2">
+                        <label for="street_number" class="form-label">Numer</label>
+                        <input type="text" class="form-control" id="street_number" name="street_number" value="{{ restaurant.StreetNumber if restaurant.StreetNumber }}">
+                    </div>
+                     <div class="col-md-2">
+                        <label for="postal_code" class="form-label">Kod pocztowy</label>
+                        <input type="text" class="form-control" id="postal_code" name="postal_code" value="{{ restaurant.PostalCode if restaurant.PostalCode }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="city" class="form-label">Miasto</label>
+                        <input type="text" class="form-control" id="city" name="city" value="{{ restaurant.City if restaurant.City }}">
+                    </div>
+                </div>
+                 <small class="text-muted">* Pole nazwa jest wymagane.</small>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{{ url_for('manage_restaurants') }}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-1"></i> Anuluj i wróć</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill me-2"></i>Zapisz Zmiany</button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
