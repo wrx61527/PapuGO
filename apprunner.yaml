@@ -9,6 +9,10 @@ run:
   network:
     port: 8080
   env:
+    - name: AWS_REGION
+      value: 'eu-central-1'
+    - name: S3_BUCKET_NAME
+      value: 'papugo-storage'
     - name: DB_HOST
       value: papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com
     - name: DB_PORT

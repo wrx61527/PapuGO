@@ -9,40 +9,69 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, session,
-    send_from_directory, abort, current_app
+    abort, current_app, send_from_directory # send_from_directory nadal potrzebne dla static
 )
+import boto3 # Dodano import boto3
+from botocore.exceptions import ClientError # Do obsługi błędów Boto3
 
 # --- Konfiguracja Początkowa ---
-load_dotenv()
+load_dotenv() # Wczytuje zmienne z .env (głównie dla lokalnego developmentu)
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
-# Ustaw silny klucz sekretny jako zmienną środowiskową!
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'y9KzjYV6efkUdLnb3V8k')
+# Klucz sekretny Flaska - koniecznie ustaw jako zmienną środowiskową w App Runner!
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'tymczasowy-niebezpieczny-klucz-sekretny')
 
-UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-if not os.path.exists(UPLOAD_FOLDER):
+# --- Konfiguracja AWS S3 ---
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+AWS_REGION = os.getenv('AWS_REGION')
+
+# Sprawdzenie, czy podstawowa konfiguracja S3 jest obecna
+if not S3_BUCKET_NAME or not AWS_REGION:
+    app.logger.error("Krytyczny błąd: Brak konfiguracji S3_BUCKET_NAME lub AWS_REGION w zmiennych środowiskowych!")
+    # W prawdziwej aplikacji można by tu np. wyłączyć funkcje wymagające S3
+    S3_LOCATION = None
+    s3_client = None
+else:
+    S3_LOCATION = f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/"
+    app.logger.info(f"Konfiguracja S3: Bucket={S3_BUCKET_NAME}, Region={AWS_REGION}, Location={S3_LOCATION}")
+    # Inicjalizacja klienta Boto3 - dla App Runner z rolą instancji
+    # NIE POTRZEBUJEMY AWS_ACCESS_KEY_ID ani AWS_SECRET_ACCESS_KEY tutaj!
     try:
-        os.makedirs(UPLOAD_FOLDER)
-        app.logger.info(f"Utworzono folder {UPLOAD_FOLDER}")
-    except OSError as e:
-        app.logger.error(f"Nie można utworzyć folderu {UPLOAD_FOLDER}: {e}")
+        # Wystarczy podać region, boto3 samo znajdzie poświadczenia z roli
+        s3_client = boto3.client('s3', region_name=AWS_REGION)
+        app.logger.info(f"Klient Boto3 S3 utworzony dla regionu {AWS_REGION} (używa poświadczeń z roli App Runner)")
+        # Sprawdzenie dostępu (opcjonalne, ale dobre do debugowania przy starcie)
+        # s3_client.list_buckets() # Można odkomentować do testu, ale wymaga uprawnienia s3:ListAllMyBuckets
+        # app.logger.info("Testowe połączenie z S3 (list_buckets) udane.")
+    except ClientError as e:
+         app.logger.error(f"Błąd Boto3 ClientError podczas inicjalizacji S3: {e}")
+         s3_client = None
+    except Exception as e:
+        app.logger.error(f"Nieoczekiwany błąd inicjalizacji klienta Boto3 S3: {e}")
+        s3_client = None
 
-# --- Funkcje Pomocnicze ---
+    if not s3_client:
+        app.logger.error("Nie udało się zainicjalizować klienta S3. Funkcje S3 nie będą działać.")
+        # flash("Krytyczny błąd: Nie można połączyć się z magazynem plików S3.", "danger")
 
+
+# --- Funkcje Pomocnicze Bazy Danych ---
 def get_db_connection():
     """Nawiązuje połączenie z bazą danych PostgreSQL używając psycopg2."""
     try:
         db_host = os.environ.get('DB_HOST')
         db_name = os.environ.get('DB_NAME')
         db_user = os.environ.get('DB_USER')
+        # Hasło powinno być zarządzane bezpiecznie, np. przez Secrets Manager
         db_password = os.environ.get('DB_PASSWORD')
         db_port = os.environ.get('DB_PORT', '5432')
 
-        if not all([db_host, db_name, db_user, db_password]):
-             current_app.logger.error("Brak wszystkich zmiennych środowiskowych do połączenia z bazą: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD")
+        required_db_vars = {'DB_HOST': db_host, 'DB_NAME': db_name, 'DB_USER': db_user, 'DB_PASSWORD': db_password}
+        missing_vars = [k for k, v in required_db_vars.items() if not v]
+        if missing_vars:
+             current_app.logger.error(f"Brak zmiennych środowiskowych do połączenia z bazą: {', '.join(missing_vars)}")
              flash("Błąd krytyczny: Brak konfiguracji bazy danych!", "danger")
              return None
 
@@ -52,16 +81,16 @@ def get_db_connection():
             user=db_user,
             password=db_password,
             port=db_port,
-            sslmode="require"
+            sslmode="require" # Upewnij się, że jest to odpowiednie dla Twojej bazy
         )
         current_app.logger.debug("Połączenie psycopg2 nawiązane.")
         return conn
     except psycopg2.OperationalError as e:
-        current_app.logger.error(f"Błąd połączenia psycopg2 (OperationalError) do {db_host}:{db_port}/{db_name} jako {db_user}: {e}")
-        flash(f"Błąd połączenia z bazą danych: Nie można połączyć.", "danger")
+        current_app.logger.error(f"Błąd połączenia psycopg2 (OperationalError): {e}")
+        flash(f"Błąd połączenia z bazą danych.", "danger")
     except Exception as e:
         current_app.logger.error(f"Nieoczekiwany błąd połączenia psycopg2: {e}")
-        flash(f"Nieoczekiwany błąd połączenia: {e}", "danger")
+        flash(f"Nieoczekiwany błąd połączenia.", "danger")
     return None
 
 def allowed_file(filename):
@@ -73,12 +102,85 @@ def format_address(street, number, code, city):
     if city_str: full_address += (", " if full_address else "") + city_str
     return full_address if full_address else None
 
-# Uproszczone funkcje konwersji, DictCursor zwraca obiekty podobne do słowników
 def rows_to_dicts(cursor, rows):
+    # DictCursor robi to automatycznie, ale dla pewności
     return [dict(row) for row in rows]
 
 def row_to_dict(cursor, row):
+    # DictCursor robi to automatycznie
     return dict(row) if row else None
+
+# --- Funkcje Pomocnicze S3 ---
+def upload_file_to_s3(file, bucket_name, object_name=None, acl="public-read"):
+    """Wgrywa plik (obiekt plikopodobny) do bucketa S3"""
+    if not s3_client:
+        app.logger.error("Klient S3 nie jest skonfigurowany. Nie można wgrać pliku.")
+        return None
+    if not file or not file.filename:
+        app.logger.warning("Próba wgrania pustego pliku.")
+        return None
+
+    # Generuj nazwę obiektu w S3 jeśli nie podano
+    if object_name is None:
+        original_filename = secure_filename(file.filename)
+        extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+        object_name = f"uploads/{uuid.uuid4()}.{extension}" # Domyślny folder 'uploads' w S3
+
+    try:
+        # Używamy upload_fileobj dla obiektów plikopodobnych z Flaska
+        s3_client.upload_fileobj(
+            file,
+            bucket_name,
+            object_name,
+            ExtraArgs={
+                "ACL": acl, # Ustawienie ACL, aby plik był publicznie odczytywalny
+                "ContentType": file.content_type # Ważne dla poprawnego wyświetlania w przeglądarce
+            }
+        )
+        # Konstruujemy pełny URL pliku
+        file_url = f"{S3_LOCATION}{object_name}"
+        app.logger.info(f"Plik {object_name} wgrany do S3: {file_url}")
+        return file_url # Zwracamy pełny URL
+    except ClientError as e:
+        app.logger.error(f"Błąd wgrywania pliku '{object_name}' do S3: {e}")
+        return None
+    except Exception as e:
+         app.logger.error(f"Nieoczekiwany błąd podczas wgrywania pliku do S3: {e}")
+         return None
+
+def delete_file_from_s3(bucket_name, object_url_or_key):
+    """Usuwa plik z bucketa S3 na podstawie jego pełnego URL lub klucza"""
+    if not s3_client:
+        app.logger.error("Klient S3 nie jest skonfigurowany. Nie można usunąć pliku.")
+        return False
+    if not object_url_or_key:
+         app.logger.warning("Próba usunięcia pliku z S3 bez podania URL/klucza.")
+         return False
+
+    object_key = object_url_or_key
+    # Wyciągnij klucz (ścieżkę w buckecie) z pełnego URL, jeśli podano URL
+    if object_url_or_key.startswith(S3_LOCATION):
+        object_key = object_url_or_key[len(S3_LOCATION):]
+
+    if not object_key: # Jeśli po usunięciu prefixu nic nie zostało
+        app.logger.warning(f"Nie udało się wyodrębnić klucza S3 z: {object_url_or_key}")
+        return False
+
+    try:
+        s3_client.delete_object(Bucket=bucket_name, Key=object_key)
+        app.logger.info(f"Plik {object_key} usunięty z S3 bucketa {bucket_name}")
+        return True
+    except ClientError as e:
+        # Możliwy błąd jeśli plik nie istnieje, logujemy jako warning
+        if e.response['Error']['Code'] == 'NoSuchKey':
+             app.logger.warning(f"Plik {object_key} nie znaleziony w S3 podczas próby usunięcia.")
+             return True # Traktujemy jako sukces, bo pliku i tak nie ma
+        app.logger.error(f"Błąd usuwania pliku {object_key} z S3: {e}")
+        return False
+    except Exception as e:
+        app.logger.error(f"Nieoczekiwany błąd podczas usuwania pliku {object_key} z S3: {e}")
+        return False
+
 
 # --- Dekorator Admina ---
 def admin_required(f):
@@ -90,25 +192,8 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Funkcja usuwania pliku ---
-def delete_image_file(filename):
-    """Bezpiecznie usuwa plik obrazka z folderu uploads."""
-    if not filename:
-        return False
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-            app.logger.info(f"Usunięto plik: {file_path}")
-            return True
-        except Exception as e:
-            app.logger.error(f"Nie udało się usunąć pliku {file_path}: {e}")
-            return False
-    else:
-        app.logger.warning(f"Plik do usunięcia nie istnieje: {file_path}")
-        return False
 
-# --- Trasy Frontend --- (bez zmian)
+# --- Trasy Frontend ---
 
 @app.route('/')
 def index():
@@ -116,10 +201,10 @@ def index():
     restaurants_display = []
     if not conn:
         return render_template('index.html', restaurants=restaurants_display)
-
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        # ImageURL zawiera teraz pełny URL S3 lub None
         cursor.execute('SELECT "RestaurantID", "Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL" FROM "Restaurants" ORDER BY "Name"')
         restaurants = rows_to_dicts(cursor, cursor.fetchall())
         for r in restaurants:
@@ -155,12 +240,10 @@ def login():
         try:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             if action == 'login':
-                # PAMIĘTAJ O HASHOWANIU HASEŁ W PRAWDZIWEJ APLIKACJI!
                 cursor.execute('SELECT "UserID", "Username", "IsAdmin", "Password" FROM "Users" WHERE "Username" = %s', (username,))
                 user_row = row_to_dict(cursor, cursor.fetchone())
-
-                # TO JEST NIEBEZPIECZNE PORÓWNANIE HASEŁ - TYLKO DLA PRZYKŁADU!
-                if user_row and user_row['Password'] == password:
+                # ZASTOSUJ BEZPIECZNE HASHOWANIE I WERYFIKACJĘ HASEŁ! (np. Werkzeug, passlib)
+                if user_row and user_row['Password'] == password: # TO JEST BARDZO NIEBEZPIECZNE!
                     session['user_id'] = user_row['UserID']
                     session['username'] = user_row['Username']
                     session['is_admin'] = user_row['IsAdmin']
@@ -177,8 +260,8 @@ def login():
 
             elif action == 'register':
                 try:
-                    # PAMIĘTAJ O HASHOWANIU HASEŁ W PRAWDZIWEJ APLIKACJI!
-                    cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, password))
+                     # ZASTOSUJ BEZPIECZNE HASHOWANIE HASEŁ PRZED ZAPISEM!
+                    cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, password)) # Zapisuje hasło w plaintext!
                     conn.commit()
                     app.logger.info(f"Zarejestrowano nowego użytkownika: '{username}'.")
                     flash('Rejestracja zakończona pomyślnie. Możesz się teraz zalogować.', 'success')
@@ -219,15 +302,16 @@ def restaurant_detail(restaurant_id):
     dishes_display = []
     if not conn:
         return redirect(url_for('index'))
-
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        # ImageURL zawiera teraz pełny URL S3 lub None
         cursor.execute('SELECT "RestaurantID", "Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL" FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,))
         restaurant_display = row_to_dict(cursor, cursor.fetchone())
 
         if restaurant_display:
             restaurant_display['FullAddress'] = format_address(restaurant_display.get('Street'), restaurant_display.get('StreetNumber'), restaurant_display.get('PostalCode'), restaurant_display.get('City')) or "Brak adresu"
+            # ImageURL dań również zawiera URL S3 lub None
             cursor.execute('SELECT "DishID", "Name", "Description", "Price", "ImageURL" FROM "Dishes" WHERE "RestaurantID" = %s ORDER BY "Name"', (restaurant_id,))
             dishes_display = rows_to_dicts(cursor, cursor.fetchall())
             return render_template('restaurant_detail.html', restaurant=restaurant_display, dishes=dishes_display)
@@ -250,15 +334,14 @@ def search():
     restaurants_display = []
     if not query:
         return render_template('index.html', restaurants=restaurants_display, search_query=query)
-
     conn = get_db_connection()
     if not conn:
         return render_template('index.html', restaurants=restaurants_display, search_query=query)
-
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         search_term = f"%{query}%"
+        # ImageURL zawiera teraz pełny URL S3 lub None
         sql = 'SELECT "RestaurantID", "Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL" FROM "Restaurants" WHERE "Name" ILIKE %s OR "CuisineType" ILIKE %s OR "City" ILIKE %s ORDER BY "Name"'
         cursor.execute(sql, (search_term, search_term, search_term))
         restaurants = rows_to_dicts(cursor, cursor.fetchall())
@@ -275,18 +358,15 @@ def search():
         if conn and not conn.closed:
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania połączenia w search: {close_err}")
-
     return render_template('index.html', restaurants=restaurants_display, search_query=query)
 
-
-# --- Trasy Koszyka i Zamówień --- (bez zmian)
+# --- Trasy Koszyka i Zamówień --- (bez zmian funkcjonalnych)
 
 @app.route('/cart/add/<int:dish_id>', methods=['POST'])
 def add_to_cart(dish_id):
     if 'user_id' not in session:
         flash('Musisz być zalogowany, aby dodać produkty do koszyka.', 'warning')
         return redirect(url_for('login'))
-
     try: quantity = int(request.form.get('quantity', 1)); assert quantity > 0
     except: flash('Nieprawidłowa ilość produktu.', 'warning'); return redirect(request.referrer or url_for('index'))
 
@@ -301,12 +381,11 @@ def add_to_cart(dish_id):
     except Exception as e: app.logger.error(f"Błąd pobierania dania {dish_id} do koszyka: {e}"); flash("Błąd pobierania dania.", "danger")
     finally:
         if cursor: cursor.close()
-        # Zamknij połączenie tylko jeśli danie nie zostało znalezione lub wystąpił błąd
-        if conn and not conn.closed and not dish_data_dict:
+        if conn and not conn.closed and not dish_data_dict: # Zamknij tylko jeśli był błąd lub nie znaleziono
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w add_to_cart (finally): {close_err}")
 
-    if dish_data_dict:
+    if dish_data_dict: # Kontynuuj tylko jeśli znaleziono danie
         if 'cart' not in session: session['cart'] = {}
         cart = session.get('cart', {}); dish_id_str = str(dish_id)
         try:
@@ -315,14 +394,12 @@ def add_to_cart(dish_id):
             session['cart'] = cart; session.modified = True
             flash(f"Dodano '{dish_data_dict['Name']}' (x{quantity}) do koszyka.", 'success')
         except (KeyError, ValueError) as e: app.logger.error(f"Błąd koszyka dla dania {dish_id}: {e}"); flash("Błąd dodawania do koszyka.", "danger")
-        finally:
-            # Zamknij połączenie po operacji na koszyku
+        finally: # Zamknij połączenie po operacji na koszyku (jeśli nie zostało zamknięte wcześniej)
             if conn and not conn.closed:
                 try: conn.close()
                 except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w add_to_cart po operacji: {close_err}")
 
     return redirect(redirect_url)
-
 
 @app.route('/cart')
 def view_cart():
@@ -383,12 +460,16 @@ def checkout():
 
         conn.commit(); session.pop('cart', None); session.modified = True
         flash('Zamówienie złożone pomyślnie!', 'success')
+        # Zamknij połączenie PRZED przekierowaniem
+        if cursor: cursor.close()
+        if conn and not conn.closed: conn.close()
         return redirect(url_for('order_confirmation', order_id=new_order_id))
+
     except Exception as e:
         conn.rollback(); app.logger.error(f"BŁĄD checkout dla UserID {session.get('user_id')}: {e}"); flash('Błąd podczas składania zamówienia.', 'danger')
         return redirect(url_for('view_cart'))
     finally:
-        if cursor: cursor.close()
+        if cursor and not cursor.closed: cursor.close()
         if conn and not conn.closed:
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania połączenia w checkout: {close_err}")
@@ -405,26 +486,23 @@ def order_confirmation(order_id):
 def admin_dashboard():
     return render_template('admin/admin_dashboard.html')
 
-# --- Zarządzanie Restauracjami (Dodawanie, Lista, Usuwanie) ---
+# --- Zarządzanie Restauracjami ---
 @app.route('/admin/restaurants', methods=['GET', 'POST'])
 @admin_required
 def manage_restaurants():
     conn = get_db_connection()
     if not conn: flash('Nie można połączyć z bazą danych.', 'danger'); return redirect(url_for('admin_dashboard'))
-
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         if request.method == 'POST':
-            action = request.form.get('action')
-            form_submitted = False # Flaga do kontroli przekierowania
+            action = request.form.get('action'); form_submitted = False
 
             # --- DODAWANIE RESTAURACJI ---
             if action == 'add':
                 form_submitted = True
                 name = request.form.get('name', '').strip()
-                if not name:
-                    flash('Nazwa restauracji jest wymagana.', 'warning')
+                if not name: flash('Nazwa restauracji jest wymagana.', 'warning')
                 else:
                     cuisine = request.form.get('cuisine', '').strip() or None
                     street = request.form.get('street', '').strip() or None
@@ -432,29 +510,26 @@ def manage_restaurants():
                     postal_code = request.form.get('postal_code', '').strip() or None
                     city = request.form.get('city', '').strip() or None
                     image_file = request.files.get('image')
-                    image_filename = None; save_path = None
+                    image_s3_url = None
 
                     if image_file and image_file.filename != '':
                         if allowed_file(image_file.filename):
                             original_filename = secure_filename(image_file.filename)
-                            extension = original_filename.rsplit('.', 1)[1].lower()
-                            unique_filename = f"restaurant_{uuid.uuid4()}.{extension}"
-                            save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                            try:
-                                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-                                image_file.save(save_path)
-                                image_filename = unique_filename; app.logger.info(f"Zapisano obrazek restauracji: {save_path}")
-                            except Exception as e: app.logger.error(f"Błąd zapisu pliku: {e}"); flash('Błąd zapisu pliku obrazka.', 'danger')
-                        else: flash('Niedozwolony typ pliku obrazka.', 'warning')
+                            extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+                            # Tworzenie unikalnej nazwy obiektu (klucza) w S3
+                            unique_object_key = f"restaurants/restaurant_{uuid.uuid4()}.{extension}"
+                            image_s3_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
+                            if not image_s3_url: flash('Błąd wgrywania pliku do S3.', 'danger')
+                        else: flash('Niedozwolony typ pliku.', 'warning')
 
                     try:
                         sql = 'INSERT INTO "Restaurants" ("Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL") VALUES (%s, %s, %s, %s, %s, %s, %s)'
-                        cursor.execute(sql, (name, cuisine, street, street_number, postal_code, city, image_filename))
+                        cursor.execute(sql, (name, cuisine, street, street_number, postal_code, city, image_s3_url))
                         conn.commit()
-                        flash(f'Restauracja "{name}" dodana pomyślnie.', 'success')
+                        flash(f'Restauracja "{name}" dodana.', 'success')
                     except Exception as e:
                         conn.rollback(); app.logger.error(f"Błąd dodawania restauracji '{name}': {e}"); flash('Błąd zapisu do bazy danych.', 'danger')
-                        if save_path and os.path.exists(save_path): delete_image_file(unique_filename) # Usuń plik przy błędzie DB
+                        if image_s3_url: delete_file_from_s3(S3_BUCKET_NAME, image_s3_url)
 
             # --- USUWANIE RESTAURACJI ---
             elif action == 'delete':
@@ -464,47 +539,50 @@ def manage_restaurants():
                  else:
                      try:
                          restaurant_id = int(restaurant_id_str)
-                         # Pobierz nazwę pliku obrazka przed usunięciem rekordu
+                         # Pobierz URL obrazka restauracji
                          cursor.execute('SELECT "ImageURL" FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,))
-                         result_row = cursor.fetchone()
-                         image_to_delete = result_row['ImageURL'] if result_row and result_row['ImageURL'] else None
+                         rest_img_row = cursor.fetchone()
+                         image_s3_url_to_delete = rest_img_row['ImageURL'] if rest_img_row and rest_img_row['ImageURL'] else None
 
-                         # Usuń rekord (CASCADE powinien usunąć powiązane dania i ich obrazki - ZALEŻY OD SCHEMATU DB)
-                         # Jeśli nie ma CASCADE, trzeba najpierw usunąć dania i ich obrazki
-                         # Zakładając, że CASCADE jest ustawiony:
+                         # Pobierz URLe obrazków powiązanych dań
+                         cursor.execute('SELECT "ImageURL" FROM "Dishes" WHERE "RestaurantID" = %s', (restaurant_id,))
+                         dishes_images_rows = cursor.fetchall()
+
+                         # Usuń rekord restauracji (i powiązane dania jeśli jest CASCADE w DB)
                          cursor.execute('DELETE FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,))
                          deleted_count = cursor.rowcount
-                         conn.commit()
+                         conn.commit() # Zatwierdź usunięcie z DB
 
                          if deleted_count > 0:
                              app.logger.info(f"Usunięto restaurację ID: {restaurant_id}")
-                             flash(f'Restauracja ID: {restaurant_id} została usunięta.', 'success')
-                             # Usuń główny obrazek restauracji
-                             if image_to_delete: delete_image_file(image_to_delete)
+                             flash(f'Restauracja ID: {restaurant_id} usunięta.', 'success')
+                             # Usuń obrazki dań z S3 (jeśli istniały)
+                             for dish_image_row in dishes_images_rows:
+                                 if dish_image_row['ImageURL']:
+                                     delete_file_from_s3(S3_BUCKET_NAME, dish_image_row['ImageURL'])
+                             # Usuń główny obrazek restauracji z S3 (jeśli istniał)
+                             if image_s3_url_to_delete:
+                                 delete_file_from_s3(S3_BUCKET_NAME, image_s3_url_to_delete)
                          else:
-                             flash(f'Nie znaleziono restauracji o ID {restaurant_id} do usunięcia.', 'warning')
+                             flash(f'Nie znaleziono restauracji ID {restaurant_id}.', 'warning')
 
                      except ValueError: flash('Nieprawidłowe ID restauracji.', 'warning')
-                     except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania restauracji ID {restaurant_id_str}: {e}"); flash('Błąd podczas usuwania restauracji.', 'danger')
+                     except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania restauracji ID {restaurant_id_str}: {e}"); flash('Błąd podczas usuwania.', 'danger')
 
-            # Przekieruj po AKCJI POST, aby uniknąć F5
+            # --- PRZEKIEROWANIE ---
             if form_submitted:
                 if cursor: cursor.close()
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('manage_restaurants'))
 
-        # --- Metoda GET: Wyświetlanie listy ---
+        # --- Metoda GET ---
         cursor.execute('SELECT "RestaurantID", "Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL" FROM "Restaurants" ORDER BY "Name"')
         restaurants = rows_to_dicts(cursor, cursor.fetchall())
-        restaurants_display = []
-        for r in restaurants:
-            r['FullAddress'] = format_address(r.get('Street'), r.get('StreetNumber'), r.get('PostalCode'), r.get('City')) or "-"
-            restaurants_display.append(r)
+        restaurants_display = [{'FullAddress': format_address(r.get('Street'), r.get('StreetNumber'), r.get('PostalCode'), r.get('City')) or "-", **r} for r in restaurants]
         return render_template('admin/manage_restaurants.html', restaurants=restaurants_display)
 
     except Exception as e:
-        app.logger.error(f"Błąd w manage_restaurants: {e}")
-        flash("Wystąpił nieoczekiwany błąd.", "danger")
+        app.logger.error(f"Błąd w manage_restaurants: {e}"); flash("Wystąpił błąd.", "danger")
         return redirect(url_for('admin_dashboard'))
     finally:
          if cursor: cursor.close()
@@ -517,25 +595,20 @@ def manage_restaurants():
 @admin_required
 def edit_restaurant(restaurant_id):
     conn = get_db_connection()
-    if not conn: flash('Nie można połączyć z bazą danych.', 'danger'); return redirect(url_for('manage_restaurants'))
+    if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('manage_restaurants'))
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        # Pobierz dane restauracji do edycji
         cursor.execute('SELECT * FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,))
         restaurant = row_to_dict(cursor, cursor.fetchone())
-        if not restaurant:
-            flash('Nie znaleziono restauracji o podanym ID.', 'warning')
-            return redirect(url_for('manage_restaurants'))
+        if not restaurant: flash('Nie znaleziono restauracji.', 'warning'); return redirect(url_for('manage_restaurants'))
 
-        original_image_url = restaurant.get('ImageURL') # Zapamiętaj stary obrazek
+        original_image_url = restaurant.get('ImageURL')
 
-        # --- Obsługa POST (zapis zmian) ---
         if request.method == 'POST':
             name = request.form.get('name', '').strip()
             if not name:
-                flash('Nazwa restauracji jest wymagana.', 'warning')
-                # Renderuj ponownie formularz z błędami, przekazując istniejące dane
+                flash('Nazwa jest wymagana.', 'warning')
                 return render_template('admin/editRestaurant.html', restaurant=restaurant)
 
             cuisine = request.form.get('cuisine', '').strip() or None
@@ -544,73 +617,57 @@ def edit_restaurant(restaurant_id):
             postal_code = request.form.get('postal_code', '').strip() or None
             city = request.form.get('city', '').strip() or None
             image_file = request.files.get('image')
-            image_filename_to_save = original_image_url # Domyślnie zostaw stary
-            new_image_saved_path = None
+            image_url_to_save = original_image_url
+            new_image_uploaded_url = None
             delete_old_image = False
 
-            # Obsługa nowego pliku obrazka
             if image_file and image_file.filename != '':
                 if allowed_file(image_file.filename):
                     original_filename = secure_filename(image_file.filename)
-                    extension = original_filename.rsplit('.', 1)[1].lower()
-                    unique_filename = f"restaurant_{uuid.uuid4()}.{extension}"
-                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                    try:
-                        image_file.save(save_path)
-                        image_filename_to_save = unique_filename # Użyj nowego pliku
-                        new_image_saved_path = save_path
-                        delete_old_image = True # Oznacz stary do usunięcia PO udanym zapisie DB
-                        app.logger.info(f"Zapisano nowy obrazek restauracji: {save_path}")
-                    except Exception as e:
-                        app.logger.error(f"Błąd zapisu nowego pliku obrazka: {e}")
-                        flash('Wystąpił błąd podczas zapisywania nowego pliku obrazka.', 'danger')
-                        # Nie przerywaj, ale nie zmieniaj obrazka w DB
-                        image_filename_to_save = original_image_url
+                    extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+                    unique_object_key = f"restaurants/restaurant_{uuid.uuid4()}.{extension}"
+                    new_image_uploaded_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
+                    if new_image_uploaded_url:
+                        image_url_to_save = new_image_uploaded_url
+                        delete_old_image = True
+                    else:
+                        flash('Błąd wgrywania nowego obrazka do S3.', 'danger')
+                        image_url_to_save = original_image_url # Wróć do starego
                 else:
-                    flash('Niedozwolony typ pliku obrazka. Zmiany obrazka nie zostały zapisane.', 'warning')
-                    image_filename_to_save = original_image_url
+                    flash('Niedozwolony typ pliku.', 'warning')
+                    image_url_to_save = original_image_url
 
-            # Aktualizacja w bazie danych
             try:
                 sql = """
-                    UPDATE "Restaurants" SET
-                    "Name" = %s, "CuisineType" = %s, "Street" = %s, "StreetNumber" = %s,
-                    "PostalCode" = %s, "City" = %s, "ImageURL" = %s
-                    WHERE "RestaurantID" = %s
+                    UPDATE "Restaurants" SET "Name"=%s, "CuisineType"=%s, "Street"=%s, "StreetNumber"=%s,
+                    "PostalCode"=%s, "City"=%s, "ImageURL"=%s WHERE "RestaurantID"=%s
                 """
-                cursor.execute(sql, (name, cuisine, street, street_number, postal_code, city, image_filename_to_save, restaurant_id))
+                cursor.execute(sql, (name, cuisine, street, street_number, postal_code, city, image_url_to_save, restaurant_id))
                 conn.commit()
-                flash(f'Restauracja "{name}" została zaktualizowana.', 'success')
+                flash(f'Restauracja "{name}" zaktualizowana.', 'success')
 
-                # Usuń stary obrazek TYLKO jeśli nowy został zapisany i DB update się powiódł
                 if delete_old_image and original_image_url:
-                    delete_image_file(original_image_url)
+                    delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
 
-                # Zamknij zasoby PRZED przekierowaniem
+                # Zamknij i przekieruj
                 if cursor: cursor.close()
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('manage_restaurants'))
 
             except Exception as e:
-                conn.rollback()
-                app.logger.error(f"Błąd aktualizacji restauracji ID {restaurant_id}: {e}")
-                flash('Wystąpił błąd podczas zapisu zmian do bazy danych.', 'danger')
-                # Jeśli zapis do DB się nie powiódł, a nowy obrazek został zapisany na dysku, usuń go
-                if new_image_saved_path and os.path.exists(new_image_saved_path):
-                    delete_image_file(unique_filename)
-                # Renderuj ponownie formularz z danymi, które użytkownik próbował zapisać
-                # (Można zaktualizować słownik 'restaurant' danymi z formularza dla lepszego UX)
-                failed_data = request.form.to_dict()
-                failed_data['RestaurantID'] = restaurant_id # Dodaj ID z powrotem
-                failed_data['ImageURL'] = original_image_url # Użyj starego obrazka w widoku
+                conn.rollback(); app.logger.error(f"Błąd aktualizacji restauracji ID {restaurant_id}: {e}"); flash('Błąd zapisu zmian.', 'danger')
+                if new_image_uploaded_url: # Usuń nowo wgrany plik S3 jeśli DB fail
+                    delete_file_from_s3(S3_BUCKET_NAME, new_image_uploaded_url)
+                # Renderuj ponownie formularz z danymi wprowadzonymi przez użytkownika
+                failed_data = request.form.to_dict(); failed_data['RestaurantID'] = restaurant_id
+                failed_data['ImageURL'] = original_image_url # Pokaż stary obrazek
                 return render_template('admin/editRestaurant.html', restaurant=failed_data)
 
-        # --- Metoda GET: Wyświetlanie formularza ---
+        # Metoda GET
         return render_template('admin/editRestaurant.html', restaurant=restaurant)
 
     except Exception as e:
-        app.logger.error(f"Błąd w edycji restauracji ID {restaurant_id}: {e}")
-        flash("Wystąpił nieoczekiwany błąd.", "danger")
+        app.logger.error(f"Błąd w edycji restauracji ID {restaurant_id}: {e}"); flash("Wystąpił błąd.", "danger")
         return redirect(url_for('manage_restaurants'))
     finally:
         if cursor: cursor.close()
@@ -618,20 +675,17 @@ def edit_restaurant(restaurant_id):
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w edit_restaurant: {close_err}")
 
-# --- Zarządzanie Daniami (Lista, Dodawanie, Usuwanie) ---
+# --- Zarządzanie Daniami ---
 @app.route('/admin/dishes', methods=['GET', 'POST'])
 @app.route('/admin/dishes/<int:restaurant_id>', methods=['GET', 'POST'])
 @admin_required
 def manage_dishes(restaurant_id=None):
     conn = get_db_connection()
-    if not conn: flash('Nie można połączyć z bazą danych.', 'danger'); return redirect(url_for('admin_dashboard'))
-
+    if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('admin_dashboard'))
     restaurants_list = []; dishes_display = []; selected_restaurant_name = None; cursor = None
-    redirect_to_restaurant_id = restaurant_id # Do przekierowania po POST
-
+    redirect_to_restaurant_id = restaurant_id
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        # Pobierz listę restauracji dla selecta
         cursor.execute('SELECT "RestaurantID", "Name" FROM "Restaurants" ORDER BY "Name"')
         restaurants_rows = cursor.fetchall()
         restaurants_list = [(row['RestaurantID'], row['Name']) for row in restaurants_rows]
@@ -640,11 +694,7 @@ def manage_dishes(restaurant_id=None):
             action = request.form.get('action'); form_submitted = False
             rest_id_form_str = request.form.get('restaurant_id')
             try: current_restaurant_id = int(rest_id_form_str) if rest_id_form_str else restaurant_id
-            except (ValueError, TypeError):
-                 flash('Nieprawidłowe ID restauracji.', 'danger')
-                 if cursor: cursor.close();
-                 if conn and not conn.closed: conn.close()
-                 return redirect(url_for('manage_dishes'))
+            except: flash('Nieprawidłowe ID restauracji.', 'danger'); return redirect(url_for('manage_dishes'))
 
             # --- DODAWANIE DANIA ---
             if action == 'add':
@@ -655,7 +705,7 @@ def manage_dishes(restaurant_id=None):
                     description = request.form.get('description', '').strip() or None
                     price_str = request.form.get('price')
                     image_file = request.files.get('image')
-                    image_filename = None; price_decimal = None; save_path = None
+                    image_s3_url = None; price_decimal = None
 
                     if not name or not price_str: flash('Nazwa i cena są wymagane.', 'warning')
                     else:
@@ -665,54 +715,52 @@ def manage_dishes(restaurant_id=None):
                     if name and price_decimal is not None:
                         if image_file and image_file.filename != '':
                              if allowed_file(image_file.filename):
-                                 original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower()
-                                 unique_filename = f"dish_{uuid.uuid4()}.{extension}"; save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                                 try: os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True); image_file.save(save_path); image_filename = unique_filename
-                                 except Exception as e: flash('Błąd zapisu obrazka.', 'danger'); app.logger.error(f"Błąd zapisu obrazka dania: {e}")
+                                 original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+                                 unique_object_key = f"dishes/dish_{uuid.uuid4()}.{extension}"
+                                 image_s3_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
+                                 if not image_s3_url: flash('Błąd wgrywania obrazka dania.', 'danger')
                              else: flash('Niedozwolony typ pliku.', 'warning')
 
                         try:
                             sql = 'INSERT INTO "Dishes" ("RestaurantID", "Name", "Description", "Price", "ImageURL") VALUES (%s, %s, %s, %s, %s)'
-                            cursor.execute(sql, (current_restaurant_id, name, description, price_decimal, image_filename))
+                            cursor.execute(sql, (current_restaurant_id, name, description, price_decimal, image_s3_url))
                             conn.commit()
                             flash(f'Danie "{name}" dodane.', 'success')
                         except Exception as e:
                             conn.rollback(); app.logger.error(f"Błąd dodawania dania '{name}': {e}"); flash('Błąd zapisu dania.', 'danger')
-                            if save_path and os.path.exists(save_path): delete_image_file(unique_filename)
+                            if image_s3_url: delete_file_from_s3(S3_BUCKET_NAME, image_s3_url)
 
             # --- USUWANIE DANIA ---
             elif action == 'delete':
                  form_submitted = True
                  dish_id_str = request.form.get('dish_id')
-                 if not dish_id_str or not current_restaurant_id: flash('Brak ID dania lub restauracji.', 'warning')
+                 if not dish_id_str or not current_restaurant_id: flash('Brak ID dania/restauracji.', 'warning')
                  else:
                       try:
                           dish_id = int(dish_id_str)
-                          # Pobierz nazwę pliku obrazka
                           cursor.execute('SELECT "ImageURL" FROM "Dishes" WHERE "DishID" = %s', (dish_id,))
-                          result_row = cursor.fetchone()
-                          image_to_delete = result_row['ImageURL'] if result_row and result_row['ImageURL'] else None
+                          dish_img_row = cursor.fetchone()
+                          image_s3_url_to_delete = dish_img_row['ImageURL'] if dish_img_row and dish_img_row['ImageURL'] else None
 
-                          # Usuń danie
                           cursor.execute('DELETE FROM "Dishes" WHERE "DishID" = %s AND "RestaurantID" = %s', (dish_id, current_restaurant_id))
                           deleted_count = cursor.rowcount; conn.commit()
 
                           if deleted_count > 0:
-                              app.logger.info(f"Usunięto danie ID: {dish_id} z restauracji ID: {current_restaurant_id}"); flash(f'Danie ID: {dish_id} usunięte.', 'success')
-                              if image_to_delete: delete_image_file(image_to_delete)
-                          else: flash(f'Nie znaleziono dania ID {dish_id} w tej restauracji.', 'warning')
+                              app.logger.info(f"Usunięto danie ID: {dish_id}"); flash(f'Danie ID: {dish_id} usunięte.', 'success')
+                              if image_s3_url_to_delete: delete_file_from_s3(S3_BUCKET_NAME, image_s3_url_to_delete)
+                          else: flash(f'Nie znaleziono dania ID {dish_id}.', 'warning')
                       except ValueError: flash('Nieprawidłowe ID dania.', 'warning')
-                      except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania dania ID {dish_id_str}: {e}"); flash('Błąd usuwania dania.', 'danger')
+                      except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania dania ID {dish_id_str}: {e}"); flash('Błąd usuwania.', 'danger')
 
-            # --- PRZEKIEROWANIE PO POST ---
+            # --- PRZEKIEROWANIE ---
             if form_submitted:
-                 redirect_to_restaurant_id = current_restaurant_id or restaurant_id # Użyj ID z form lub URL
+                 redirect_to_restaurant_id = current_restaurant_id or restaurant_id
                  if cursor: cursor.close()
                  if conn and not conn.closed: conn.close()
                  redirect_url = url_for('manage_dishes', restaurant_id=redirect_to_restaurant_id) if redirect_to_restaurant_id else url_for('manage_dishes')
                  return redirect(redirect_url)
 
-        # --- Metoda GET: Wyświetlanie dań ---
+        # --- Metoda GET ---
         if restaurant_id:
             cursor.execute('SELECT "Name" FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,))
             rest_name_row = cursor.fetchone()
@@ -721,17 +769,14 @@ def manage_dishes(restaurant_id=None):
                 cursor.execute('SELECT "DishID", "Name", "Description", "Price", "ImageURL" FROM "Dishes" WHERE "RestaurantID" = %s ORDER BY "Name"', (restaurant_id,))
                 dishes_display = rows_to_dicts(cursor, cursor.fetchall())
             else:
-                flash(f"Restauracja ID {restaurant_id} nie znaleziona.", "warning")
-                return redirect(url_for('manage_dishes'))
+                flash(f"Restauracja ID {restaurant_id} nie znaleziona.", "warning"); return redirect(url_for('manage_dishes'))
 
         return render_template('admin/manage_dishes.html',
-                               dishes=dishes_display,
-                               restaurants=restaurants_list,
-                               selected_restaurant_id=restaurant_id,
-                               selected_restaurant_name=selected_restaurant_name)
+                               dishes=dishes_display, restaurants=restaurants_list,
+                               selected_restaurant_id=restaurant_id, selected_restaurant_name=selected_restaurant_name)
 
     except Exception as e:
-        app.logger.error(f"Błąd w manage_dishes: {e}"); flash("Nieoczekiwany błąd.", "danger")
+        app.logger.error(f"Błąd w manage_dishes: {e}"); flash("Wystąpił błąd.", "danger")
         return redirect(url_for('admin_dashboard'))
     finally:
          if cursor: cursor.close()
@@ -739,109 +784,89 @@ def manage_dishes(restaurant_id=None):
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w manage_dishes: {close_err}")
 
-
 # --- EDYCJA DANIA ---
 @app.route('/admin/dishes/<int:dish_id>/edit', methods=['GET', 'POST'])
 @admin_required
 def edit_dish(dish_id):
     conn = get_db_connection()
-    if not conn: flash('Nie można połączyć z bazą danych.', 'danger'); return redirect(url_for('manage_dishes')) # lub admin_dashboard
-
-    cursor = None
-    restaurants_list = []
-
+    if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('manage_dishes'))
+    cursor = None; restaurants_list = []
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        # Pobierz listę wszystkich restauracji dla dropdowna
         cursor.execute('SELECT "RestaurantID", "Name" FROM "Restaurants" ORDER BY "Name"')
         restaurants_rows = cursor.fetchall()
         restaurants_list = [(row['RestaurantID'], row['Name']) for row in restaurants_rows]
 
-        # Pobierz dane dania do edycji
         cursor.execute('SELECT * FROM "Dishes" WHERE "DishID" = %s', (dish_id,))
         dish = row_to_dict(cursor, cursor.fetchone())
-        if not dish:
-            flash('Nie znaleziono dania o podanym ID.', 'warning')
-            return redirect(url_for('manage_dishes')) # Lub do dashboardu
+        if not dish: flash('Nie znaleziono dania.', 'warning'); return redirect(url_for('manage_dishes'))
 
         original_image_url = dish.get('ImageURL')
-        original_restaurant_id = dish.get('RestaurantID') # Zapamiętaj ID restauracji
 
-        # --- Obsługa POST (zapis zmian) ---
         if request.method == 'POST':
             name = request.form.get('name', '').strip()
             price_str = request.form.get('price')
-            restaurant_id_str = request.form.get('restaurant_id') # Nowe ID restauracji
-            price_decimal = None
+            restaurant_id_str = request.form.get('restaurant_id')
+            price_decimal = None; new_restaurant_id = None
 
             if not name or not price_str or not restaurant_id_str:
                  flash('Nazwa, cena i restauracja są wymagane.', 'warning')
                  return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list)
 
             try: price_decimal = float(price_str); assert price_decimal >= 0
-            except: flash('Nieprawidłowa wartość ceny.', 'warning'); price_decimal = None
+            except: flash('Nieprawidłowa cena.', 'warning'); price_decimal = None
             try: new_restaurant_id = int(restaurant_id_str)
             except: flash('Nieprawidłowe ID restauracji.', 'warning'); new_restaurant_id = None
 
             if name and price_decimal is not None and new_restaurant_id is not None:
                  description = request.form.get('description', '').strip() or None
                  image_file = request.files.get('image')
-                 image_filename_to_save = original_image_url
-                 new_image_saved_path = None
+                 image_url_to_save = original_image_url
+                 new_image_uploaded_url = None
                  delete_old_image = False
 
-                 # Obsługa nowego pliku obrazka
                  if image_file and image_file.filename != '':
                      if allowed_file(image_file.filename):
-                         original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower()
-                         unique_filename = f"dish_{uuid.uuid4()}.{extension}"; save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                         try:
-                             image_file.save(save_path); image_filename_to_save = unique_filename
-                             new_image_saved_path = save_path; delete_old_image = True
-                             app.logger.info(f"Zapisano nowy obrazek dania: {save_path}")
-                         except Exception as e: app.logger.error(f"Błąd zapisu pliku: {e}"); flash('Błąd zapisu pliku.', 'danger'); image_filename_to_save = original_image_url
-                     else: flash('Niedozwolony typ pliku.', 'warning'); image_filename_to_save = original_image_url
+                         original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+                         unique_object_key = f"dishes/dish_{uuid.uuid4()}.{extension}"
+                         new_image_uploaded_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
+                         if new_image_uploaded_url:
+                             image_url_to_save = new_image_uploaded_url; delete_old_image = True
+                         else: flash('Błąd wgrywania nowego obrazka.', 'danger'); image_url_to_save = original_image_url
+                     else: flash('Niedozwolony typ pliku.', 'warning'); image_url_to_save = original_image_url
 
-                 # Aktualizacja w bazie danych
                  try:
                      sql = """
-                         UPDATE "Dishes" SET
-                         "Name" = %s, "Description" = %s, "Price" = %s,
-                         "RestaurantID" = %s, "ImageURL" = %s
-                         WHERE "DishID" = %s
+                         UPDATE "Dishes" SET "Name"=%s, "Description"=%s, "Price"=%s,
+                         "RestaurantID"=%s, "ImageURL"=%s WHERE "DishID"=%s
                      """
-                     cursor.execute(sql, (name, description, price_decimal, new_restaurant_id, image_filename_to_save, dish_id))
+                     cursor.execute(sql, (name, description, price_decimal, new_restaurant_id, image_url_to_save, dish_id))
                      conn.commit()
-                     flash(f'Danie "{name}" zostało zaktualizowane.', 'success')
+                     flash(f'Danie "{name}" zaktualizowane.', 'success')
 
                      if delete_old_image and original_image_url:
-                         delete_image_file(original_image_url)
+                         delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
 
-                     # Zamknij zasoby PRZED przekierowaniem
+                     # Zamknij i przekieruj
                      if cursor: cursor.close()
                      if conn and not conn.closed: conn.close()
-                     # Przekieruj do widoku dań dla NOWEJ restauracji (lub starej, jeśli nie zmieniono)
                      return redirect(url_for('manage_dishes', restaurant_id=new_restaurant_id))
 
                  except Exception as e:
                      conn.rollback(); app.logger.error(f"Błąd aktualizacji dania ID {dish_id}: {e}"); flash('Błąd zapisu zmian.', 'danger')
-                     if new_image_saved_path and os.path.exists(new_image_saved_path): delete_image_file(unique_filename)
-                     # Renderuj ponownie formularz z błędami
-                     failed_data = request.form.to_dict()
-                     failed_data['DishID'] = dish_id
-                     failed_data['ImageURL'] = original_image_url
+                     if new_image_uploaded_url: delete_file_from_s3(S3_BUCKET_NAME, new_image_uploaded_url)
+                     failed_data = request.form.to_dict(); failed_data['DishID'] = dish_id
+                     failed_data['ImageURL'] = original_image_url # Pokaż stary
                      return render_template('admin/editMenuItem.html', dish=failed_data, restaurants=restaurants_list)
             else:
-                 # Błąd walidacji ceny lub ID restauracji, renderuj ponownie z błędami
-                 return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list)
+                 # Błąd walidacji
+                 return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list) # Pokaż stary obrazek
 
-
-        # --- Metoda GET: Wyświetlanie formularza ---
+        # Metoda GET
         return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list)
 
     except Exception as e:
-        app.logger.error(f"Błąd w edycji dania ID {dish_id}: {e}"); flash("Nieoczekiwany błąd.", "danger")
-        # Przekieruj do listy dań dla oryginalnej restauracji lub dashboardu
+        app.logger.error(f"Błąd w edycji dania ID {dish_id}: {e}"); flash("Wystąpił błąd.", "danger")
         fallback_restaurant_id = dish.get('RestaurantID') if isinstance(dish, dict) else None
         redirect_url = url_for('manage_dishes', restaurant_id=fallback_restaurant_id) if fallback_restaurant_id else url_for('admin_dashboard')
         return redirect(redirect_url)
@@ -851,6 +876,7 @@ def edit_dish(dish_id):
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w edit_dish: {close_err}")
 
+
 # --- Zarządzanie Użytkownikami i Zamówieniami (bez zmian) ---
 
 @app.route('/admin/users')
@@ -858,13 +884,13 @@ def edit_dish(dish_id):
 def manage_users():
     conn = get_db_connection()
     users_display = []
-    if not conn: flash("Nie można połączyć z bazą danych.", "danger"); return render_template('admin/manage_users.html', users=users_display)
+    if not conn: flash("Błąd połączenia z DB.", "danger"); return render_template('admin/manage_users.html', users=users_display)
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cursor.execute('SELECT "UserID", "Username", "IsAdmin" FROM "Users" ORDER BY "Username"')
         users_display = rows_to_dicts(cursor, cursor.fetchall())
-    except Exception as e: app.logger.error(f"Błąd pobierania użytkowników: {e}"); flash("Błąd pobierania listy użytkowników.", "danger")
+    except Exception as e: app.logger.error(f"Błąd pobierania użytkowników: {e}"); flash("Błąd pobierania listy.", "danger")
     finally:
         if cursor: cursor.close()
         if conn and not conn.closed:
@@ -872,11 +898,12 @@ def manage_users():
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w manage_users: {close_err}")
     return render_template('admin/manage_users.html', users=users_display)
 
+
 @app.route('/admin/orders', methods=['GET', 'POST'])
 @admin_required
 def view_orders():
     conn = get_db_connection()
-    if not conn: flash('Nie można połączyć z bazą danych.', 'danger'); return redirect(url_for('admin_dashboard'))
+    if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('admin_dashboard'))
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -893,7 +920,7 @@ def view_orders():
                         flash('Status zamówienia zaktualizowany.', 'success')
                     except ValueError: flash('Nieprawidłowe ID zamówienia.', 'warning')
                     except Exception as e: conn.rollback(); app.logger.error(f"Błąd aktualizacji statusu zam. #{order_id_str}: {e}"); flash('Błąd aktualizacji statusu.', 'danger')
-                else: flash('Nieprawidłowe dane do aktualizacji statusu.', 'warning')
+                else: flash('Nieprawidłowe dane do aktualizacji.', 'warning')
 
             if form_submitted:
                 if cursor: cursor.close()
@@ -915,23 +942,18 @@ def view_orders():
             try: conn.close()
             except Exception as close_err: app.logger.error(f"Błąd zamykania poł. w view_orders: {close_err}")
 
-# --- Trasa do Serwowania Wgranych Plików --- (bez zmian)
 
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    """Serwuje pliki z folderu UPLOAD_FOLDER."""
-    try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
-    except FileNotFoundError:
-        app.logger.warning(f"Nie znaleziono pliku w uploads: {filename}")
-        placeholder = 'placeholder.png' # Domyślny
-        if filename.startswith('restaurant_'): placeholder = 'placeholder_restaurant.png'
-        placeholder_path = os.path.join('static', placeholder)
-        if os.path.exists(placeholder_path): return send_from_directory('static', placeholder)
-        else: app.logger.error(f"Nie znaleziono {filename} ani {placeholder}"); abort(404)
+# --- Trasa do serwowania plików statycznych (np. CSS, JS, placeholdery) ---
+# Uwaga: Trasa /uploads nie jest już potrzebna do serwowania wgranych plików!
+# send_from_directory jest nadal importowane i używane przez Flaska dla folderu 'static'
 
 # --- Uruchomienie Aplikacji ---
 if __name__ == '__main__':
-    app.logger.info("Uruchamianie serwera deweloperskiego Flask...")
-    port = int(os.environ.get("PORT", 5000))
+    # Uruchomienie lokalne (nie używane przez App Runner)
+    app.logger.info("Uruchamianie lokalnego serwera deweloperskiego Flask...")
+    # Upewnij się, że masz plik .env z lokalnymi ustawieniami DB, S3 itp.
+    # oraz AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY do lokalnych testów Boto3
+    # (Boto3 użyje ich, jeśli nie znajdzie roli EC2/ECS/AppRunner)
+    port = int(os.environ.get("PORT", 8080)) # App Runner oczekuje portu 8080 domyślnie
+    # debug=True tylko lokalnie!
     app.run(debug=os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 't'], host='0.0.0.0', port=port)
