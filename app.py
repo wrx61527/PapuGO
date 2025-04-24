@@ -17,10 +17,7 @@ load_dotenv()
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 # Ustaw silny klucz sekretny jako zmienną środowiskową!
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'domyslny_bardzo_tajny_klucz_do_zmiany_natychmiast')
-
-if app.secret_key == 'domyslny_bardzo_tajny_klucz_do_zmiany_natychmiast':
-    app.logger.warning("Używasz DOMYŚLNEGO sekretnego klucza Flaska! Zmień go natychmiast w zmiennej środowiskowej FLASK_SECRET_KEY.")
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'y9KzjYV6efkUdLnb3V8k')
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -928,11 +925,29 @@ def view_orders():
                  app.logger.error(f"Błąd zamykania połączenia w view_orders: {close_err}")
 
 
-# --- Trasa do Serwowania Wgranych Plików --- (Bez zmian)
+# --- Trasa do Serwowania Wgranych Plików ---
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    # ... (kod bez zmian)
-    pass # Zastąp 'pass' oryginalnym kodem tej funkcji
+    """Serwuje pliki z folderu UPLOAD_FOLDER."""
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
+    except FileNotFoundError:
+        app.logger.warning(f"Nie znaleziono pliku w uploads: {filename}")
+        # Spróbuj zwrócić placeholder dla dania lub restauracji
+        if filename.startswith('dish_'):
+            placeholder = 'placeholder.png'
+        elif filename.startswith('restaurant_'):
+            placeholder = 'placeholder_restaurant.png'
+        else: # Domyślny placeholder
+            placeholder = 'placeholder.png'
+
+        placeholder_path = os.path.join('static', placeholder)
+        if os.path.exists(placeholder_path):
+             return send_from_directory('static', placeholder)
+        else:
+             app.logger.error(f"Nie znaleziono ani pliku {filename}, ani placeholdera {placeholder}")
+             abort(404) # Zwróć błąd 404 Not Found
 
 # --- Uruchomienie Aplikacji ---
 # Ten blok nie jest zwykle wykonywany w produkcji, gdy używa się Gunicorn/WSGI
