@@ -1,17 +1,14 @@
-version: "1.0"
+version: 1.0
 
 runtime: python3
 
 build:
-  commands:
-    - pip install --no-cache-dir -r requirements.txt
+  commands: pip install --no-cache-dir -r requirements.txt
 
 run:
   command: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 app:app
-
   network:
     port: 8080
-
   env:
     - name: DB_HOST
       value: papugo-db.cbm4kagi2v6v.eu-central-1.rds.amazonaws.com
@@ -23,7 +20,6 @@ run:
       value: papugoadmin
     - name: FLASK_SECRET_KEY
       value: y9KzjYV6efkUdLnb3V8k
-
   secrets:
     - name: DB_PASSWORD
       valueFrom: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp
