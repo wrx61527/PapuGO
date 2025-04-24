@@ -21,4 +21,4 @@ run:
       value: y9KzjYV6efkUdLnb3V8k
   secrets:
     - name: DB_PASSWORD
-      value-from: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp:DB_PASSWORD::
+      value-from: arn:aws:secretsmanager:eu-central-1:590184075218:secret:papugo-db-password-rxp7cp:DB_PASSWORD
