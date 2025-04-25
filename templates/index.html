@@ -24,7 +24,13 @@
     {% if restaurants %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"> {% for restaurant in restaurants %}
             <div class="col">
-                <a href="{{ url_for('restaurant_detail', restaurant_id=restaurant.RestaurantID) }}" class="text-decoration-none"> <div class="card restaurant-card shadow-sm"> <img src="{{ url_for('uploaded_file', filename=restaurant.ImageURL if restaurant.ImageURL else 'placeholder_restaurant.png') }}" class="card-img-top" alt="{{ restaurant.Name }}">
+                <a href="{{ url_for('restaurant_detail', restaurant_id=restaurant.RestaurantID) }}" class="text-decoration-none">
+                    <div class="card restaurant-card shadow-sm">
+                        {% if restaurant.ImageURL %}
+                            <img src="{{ restaurant.ImageURL }}" class="card-img-top" alt="{{ restaurant.Name }}">
+                        {% else %}
+                            <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" class="card-img-top" alt="Brak zdjęcia">
+                        {% endif %}
                         <div class="card-body">
                             <div> <h5 class="card-title mb-1">{{ restaurant.Name }}</h5>
                                 {% if restaurant.CuisineType %}
@@ -34,7 +40,7 @@
                                 <p class="card-text mb-3"><small><i class="bi bi-geo-alt-fill me-1"></i>{{ restaurant.FullAddress }}</small></p>
                                 {% endif %}
                             </div>
-                            </div>
+                        </div>
                     </div>
                 </a>
             </div>

@@ -6,11 +6,14 @@
      <div class="col-md-8"> <h1 class="display-5">{{ restaurant.Name }}</h1>
          <p class="lead">{{ restaurant.CuisineType if restaurant.CuisineType else 'Restauracja' }}</p>
          <p><i class="bi bi-geo-alt-fill me-1"></i>{{ restaurant.FullAddress }}</p>
-         </div>
-     {% if restaurant.ImageURL %}
-     <div class="col-md-4"> <img src="{{ url_for('uploaded_file', filename=restaurant.ImageURL) }}" class="img-fluid rounded shadow-sm" alt="{{ restaurant.Name }}" style="max-height: 200px; width: 100%; object-fit: cover;">
      </div>
-     {% endif %}
+     <div class="col-md-4">
+         {% if restaurant.ImageURL %}
+             <img src="{{ restaurant.ImageURL }}" class="img-fluid rounded shadow-sm" alt="{{ restaurant.Name }}" style="max-height: 200px; width: 100%; object-fit: cover;">
+         {% else %}
+             <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" class="img-fluid rounded shadow-sm" alt="Brak zdjęcia" style="max-height: 200px; width: 100%; object-fit: contain; opacity: 0.5;">
+         {% endif %}
+     </div>
  </div>
 
      <h2 class="mt-4 mb-3 border-bottom pb-2">Menu</h2>
@@ -19,7 +22,7 @@
              <div class="col">
                  <div class="card h-100 shadow-sm">
                      {% if dish.ImageURL %}
-                         <img src="{{ url_for('uploaded_file', filename=dish.ImageURL) }}" class="card-img-top" alt="{{ dish.Name }}" style="height: 180px; object-fit: cover;">
+                         <img src="{{ dish.ImageURL }}" class="card-img-top" alt="{{ dish.Name }}" style="height: 180px; object-fit: cover;">
                      {% else %}
                          <img src="{{ url_for('static', filename='placeholder.png') }}" class="card-img-top" alt="Brak zdjęcia" style="height: 180px; object-fit: contain; opacity: 0.5;">
                      {% endif %}

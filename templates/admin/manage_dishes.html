@@ -73,9 +73,9 @@
                     <tr>
                          <td>
                             {% if dish.ImageURL %}
-                                <img src="{{ url_for('uploaded_file', filename=dish.ImageURL) }}" alt="{{ dish.Name }}" style="max-width: 80px; max-height: 60px; object-fit: cover;">
+                                <img src="{{ dish.ImageURL }}" alt="{{ dish.Name }}" style="max-width: 80px; max-height: 60px; object-fit: cover; border-radius: 0.25rem;">
                             {% else %}
-                                <span class="text-muted small">Brak</span>
+                                <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Brak zdjęcia" style="max-width: 80px; max-height: 60px; object-fit: contain; opacity: 0.5; border-radius: 0.25rem;">
                             {% endif %}
                         </td>
                         <td>{{ dish.DishID }}</td>

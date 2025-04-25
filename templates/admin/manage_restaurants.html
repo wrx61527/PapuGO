@@ -70,10 +70,10 @@
                 {% for r in restaurants %}
                 <tr>
                     <td>
-                       {% if r.ImageURL %}
-                           <img src="{{ url_for('uploaded_file', filename=r.ImageURL) }}" alt="{{ r.Name }}" style="max-width: 100px; max-height: 75px; object-fit: cover; border-radius: 0.25rem;">
+                        {% if r.ImageURL %}
+                           <img src="{{ r.ImageURL }}" alt="{{ r.Name }}" style="max-width: 100px; max-height: 75px; object-fit: cover; border-radius: 0.25rem;">
                        {% else %}
-                           <span class="text-muted small">Brak</span>
+                           <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" alt="Brak zdjęcia" style="max-width: 100px; max-height: 75px; object-fit: contain; opacity: 0.5; border-radius: 0.25rem;">
                        {% endif %}
                    </td>
                     <td>{{ r.RestaurantID }}</td>

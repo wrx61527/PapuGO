@@ -41,15 +41,15 @@
                      <div class="col-md-12">
                          <label for="dish_image" class="form-label">Zmień zdjęcie dania</label>
                          <input class="form-control" type="file" id="dish_image" name="image" accept="image/png, image/jpeg, image/gif">
-                         {% if dish.ImageURL %}
-                            <div class="mt-2">
-                                <small>Obecne zdjęcie:</small><br>
-                                <img src="{{ url_for('uploaded_file', filename=dish.ImageURL) }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
-                                 <small class="d-block text-muted">{{ dish.ImageURL }}</small>
-                            </div>
-                        {% else %}
-                            <small class="d-block text-muted mt-2">Brak obecnego zdjęcia.</small>
-                        {% endif %}
+                         <div class="mt-2">
+                             <small>Obecne zdjęcie:</small><br>
+                             {% if dish.ImageURL %}
+                                <img src="{{ dish.ImageURL }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
+                                <small class="d-block text-muted">{{ dish.ImageURL.split('/')[-1] }}</small> {% else %}
+                                <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Brak zdjęcia" style="max-width: 150px; max-height: 100px; object-fit: contain; opacity: 0.5; border-radius: 0.25rem;">
+                                <small class="d-block text-muted mt-1">Brak obecnego zdjęcia.</small>
+                             {% endif %}
+                        </div>
                      </div>
                  </div>
                  <small class="text-muted">* Pola restauracja, nazwa i cena są wymagane.</small>

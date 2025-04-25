@@ -6,7 +6,9 @@
     <h1 class="mb-4">Edytuj Restaurację: {{ restaurant.Name }}</h1>
 
     <form method="POST" action="{{ url_for('edit_restaurant', restaurant_id=restaurant.RestaurantID) }}" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="edit"> <div class="card mb-4 shadow-sm">
+        <input type="hidden" name="action" value="edit">
+
+        <div class="card mb-4 shadow-sm">
             <div class="card-header">
                 Dane Restauracji
             </div>
@@ -23,15 +25,15 @@
                     <div class="col-md-3">
                         <label for="rest_image" class="form-label">Zmień zdjęcie restauracji</label>
                         <input class="form-control" type="file" id="rest_image" name="image" accept="image/png, image/jpeg, image/gif">
-                        {% if restaurant.ImageURL %}
-                            <div class="mt-2">
-                                <small>Obecne zdjęcie:</small><br>
-                                <img src="{{ url_for('uploaded_file', filename=restaurant.ImageURL) }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
-                                <small class="d-block text-muted">{{ restaurant.ImageURL }}</small>
-                            </div>
-                        {% else %}
-                            <small class="d-block text-muted mt-2">Brak obecnego zdjęcia.</small>
-                        {% endif %}
+                        <div class="mt-2">
+                            <small>Obecne zdjęcie:</small><br>
+                            {% if restaurant.ImageURL %}
+                                <img src="{{ restaurant.ImageURL }}" alt="Obecne zdjęcie" style="max-width: 150px; max-height: 100px; object-fit: cover; border-radius: 0.25rem;">
+                                <small class="d-block text-muted">{{ restaurant.ImageURL.split('/')[-1] }}</small> {% else %}
+                                <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" alt="Brak zdjęcia" style="max-width: 150px; max-height: 100px; object-fit: contain; opacity: 0.5; border-radius: 0.25rem;">
+                                <small class="d-block text-muted mt-1">Brak obecnego zdjęcia.</small>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 <div class="row g-3 mb-3">
