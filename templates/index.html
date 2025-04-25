@@ -2,8 +2,8 @@
 {% block title %}Znajdź Restaurację - PapuGO{% endblock %}
 
 {% block content %}
-    {# Baner (bez zmian w stosunku do poprzedniej wersji) #}
-    <div class="p-4 mb-4 bg-light text-dark rounded-3 shadow-sm border border-secondary" style="background-image: url('{{ url_for('static', filename='banner.png') }}'); background-size: cover; background-position: center bottom; background-color: rgba(248, 249, 250, 0.75); background-blend-mode: lighten;">
+    {# Zaktualizowany baner z powtarzalnym tłem poziomym #}
+    <div class="p-4 mb-4 bg-light text-dark rounded-3 shadow-sm border border-secondary" style="background-image: url('{{ url_for('static', filename='banner.jpg') }}'); background-repeat: repeat-x; background-position: center bottom; background-color: rgba(248, 249, 250, 0.75); background-blend-mode: lighten;"> {# Usunięto background-size: cover; dodano background-repeat: repeat-x; #}
         <div class="container-fluid py-3">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="display-6 fw-bold">
@@ -25,10 +25,8 @@
     </div>
 
     {% if restaurants %}
-        {# Dodano klasę 'restaurant-grid' do kontenera kart dla stylów animacji #}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 restaurant-grid">
             {% for restaurant in restaurants %}
-            {# Dodano styl inline dla animation-delay obliczanego na podstawie indeksu pętli #}
             <div class="col restaurant-card-col" style="animation-delay: {{ loop.index0 * 0.08 }}s;">
                 <a href="{{ url_for('restaurant_detail', restaurant_id=restaurant.RestaurantID) }}" class="text-decoration-none">
                     <div class="card restaurant-card h-100 shadow-sm">
@@ -63,32 +61,27 @@
          </div>
     {% endif %}
 
-    {# Zaktualizowany styl dla kart restauracji + Dodano style animacji #}
+    {# Style animacji i hover (bez zmian) #}
     <style>
-        /* Definicja animacji pojawiania się */
         @keyframes fadeInSlideUp {
             from {
                 opacity: 0;
-                transform: translateY(20px); /* Startuje lekko niżej */
+                transform: translateY(20px);
             }
             to {
                 opacity: 1;
-                transform: translateY(0); /* Kończy w normalnej pozycji */
+                transform: translateY(0);
             }
         }
 
-        /* Styl dla kolumny zawierającej kartę - inicjalnie ukryta */
         .restaurant-grid .restaurant-card-col {
-            opacity: 0; /* Startuje jako niewidoczna */
-            /* Zastosowanie animacji */
+            opacity: 0;
             animation-name: fadeInSlideUp;
-            animation-duration: 0.5s; /* Czas trwania animacji */
-            animation-timing-function: ease-out; /* Funkcja przyspieszenia */
-            animation-fill-mode: forwards; /* Utrzymuje stan końcowy animacji */
-            /* animation-delay zostanie ustawiony inline w pętli Jinja */
+            animation-duration: 0.5s;
+            animation-timing-function: ease-out;
+            animation-fill-mode: forwards;
         }
 
-        /* Style dla efektu hover (bez zmian) */
         .restaurant-card img.card-img-top {
             transition: transform 0.3s ease-in-out;
         }
