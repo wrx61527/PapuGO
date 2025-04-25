@@ -7,8 +7,10 @@ import logging
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+# Dodajemy obsługę błędów HTTP (np. 403 Forbidden)
 from werkzeug.exceptions import Forbidden, NotFound
-from werkzeug.security import generate_password_hash, check_password_hash # Narzędzia do hashowania haseł (BARDZO WAŻNE!)
+# Dodajemy narzędzia do hashowania haseł (BARDZO WAŻNE!)
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, session,
@@ -21,7 +23,6 @@ from botocore.exceptions import ClientError
 load_dotenv()
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
-# Pamiętaj, aby ustawić bezpieczny klucz w zmiennych środowiskowych!
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'ustaw-bezpieczny-klucz-w-env!') # ZMIEŃ TO!
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -38,9 +39,8 @@ else:
     S3_LOCATION = f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/"
     app.logger.info(f"Konfiguracja S3: Bucket={S3_BUCKET_NAME}, Region={AWS_REGION}, Location={S3_LOCATION}")
     try:
-        # Zakładamy użycie poświadczeń z roli IAM (np. w App Runner)
         s3_client = boto3.client('s3', region_name=AWS_REGION)
-        app.logger.info(f"Klient Boto3 S3 utworzony dla regionu {AWS_REGION}")
+        app.logger.info(f"Klient Boto3 S3 utworzony dla regionu {AWS_REGION} (używa poświadczeń z roli)")
     except Exception as e:
         app.logger.error(f"Błąd inicjalizacji klienta Boto3 S3: {e}")
         s3_client = None
@@ -49,12 +49,12 @@ else:
 
 # --- Funkcje Pomocnicze Bazy Danych ---
 def get_db_connection():
-    """Nawiązuje połączenie z bazą danych PostgreSQL."""
+    """Nawiązuje połączenie z bazą danych PostgreSQL używając psycopg2."""
     try:
         db_host = os.environ.get('DB_HOST')
         db_name = os.environ.get('DB_NAME')
         db_user = os.environ.get('DB_USER')
-        db_password = os.environ.get('DB_PASSWORD') # Rozważ użycie AWS Secrets Manager
+        db_password = os.environ.get('DB_PASSWORD') # Bezpieczniej z Secrets Manager!
         db_port = os.environ.get('DB_PORT', '5432')
         required_db_vars = {'DB_HOST': db_host, 'DB_NAME': db_name, 'DB_USER': db_user, 'DB_PASSWORD': db_password}
         missing_vars = [k for k, v in required_db_vars.items() if not v]
@@ -62,11 +62,10 @@ def get_db_connection():
              current_app.logger.error(f"Brak zmiennych środowiskowych bazy: {', '.join(missing_vars)}")
              flash("Błąd krytyczny: Brak konfiguracji bazy danych!", "danger")
              return None
-        # Wymagaj SSL dla połączeń RDS
         conn = psycopg2.connect(host=db_host, database=db_name, user=db_user, password=db_password, port=db_port, sslmode="require")
         current_app.logger.debug("Połączenie psycopg2 nawiązane.")
         return conn
-    except Exception as e:
+    except Exception as e: # Łapiemy ogólny wyjątek, logujemy szczegóły
         current_app.logger.error(f"Błąd połączenia psycopg2: {type(e).__name__}: {e}")
         flash(f"Błąd połączenia z bazą danych.", "danger")
     return None
@@ -90,8 +89,9 @@ def upload_file_to_s3(file, bucket_name, object_name=None):
     if object_name is None:
         original_filename = secure_filename(file.filename)
         extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-        # Domyślna ścieżka, może być dostosowana
-        object_name = f"uploads/{uuid.uuid4()}.{extension}"
+        if 'restaurants/' in file.filename or 'dishes/' in file.filename: # Proste sprawdzenie
+             object_name = f"{'restaurants' if 'restaurants/' in file.filename else 'dishes'}/{uuid.uuid4()}.{extension}"
+        else: object_name = f"uploads/{uuid.uuid4()}.{extension}"
     try:
         s3_client.upload_fileobj(file, bucket_name, object_name, ExtraArgs={"ContentType": file.content_type})
         file_url = f"{S3_LOCATION}{object_name}"
@@ -104,7 +104,6 @@ def delete_file_from_s3(bucket_name, object_url_or_key):
     if not s3_client: app.logger.error("S3 client error."); return False
     if not object_url_or_key: app.logger.warning("S3 delete attempt with no key/URL."); return False
     object_key = object_url_or_key
-    # Usuń prefix URL S3, aby uzyskać klucz obiektu
     if object_url_or_key.startswith(S3_LOCATION): object_key = object_url_or_key[len(S3_LOCATION):]
     if not object_key: app.logger.warning(f"Could not extract S3 key from: {object_url_or_key}"); return False
     try:
@@ -112,7 +111,6 @@ def delete_file_from_s3(bucket_name, object_url_or_key):
         app.logger.info(f"File {object_key} deleted from S3 bucket {bucket_name}")
         return True
     except ClientError as e:
-        # Jeśli klucz nie istnieje, traktujemy to jako sukces (już usunięty)
         if e.response['Error']['Code'] == 'NoSuchKey': app.logger.warning(f"File {object_key} not found in S3 during delete."); return True
         app.logger.error(f"S3 delete error for {object_key}: {e}"); return False
     except Exception as e: app.logger.error(f"Unexpected S3 delete error for {object_key}: {e}"); return False
@@ -131,6 +129,7 @@ def admin_required(f):
 
 @app.route('/')
 def index():
+    # ... (bez zmian w logice pobierania) ...
     conn = get_db_connection()
     restaurants_display = []
     if not conn: return render_template('index.html', restaurants=restaurants_display)
@@ -152,7 +151,7 @@ def login():
     if request.method == 'POST':
         action = request.form.get('action')
         username = request.form.get('username')
-        password = request.form.get('password')
+        password = request.form.get('password') # Hasło w plaintext!
 
         if not username or not password:
             flash('Nazwa użytkownika i hasło są wymagane.', 'warning')
@@ -167,17 +166,18 @@ def login():
                 cursor.execute('SELECT "UserID", "Username", "IsAdmin", "Password" FROM "Users" WHERE "Username" = %s', (username,))
                 user_row = row_to_dict(cursor, cursor.fetchone())
 
-                # !! BARDZO WAŻNE: UŻYJ check_password_hash do porównania hasła !!
-                if user_row and check_password_hash(user_row['Password'], password):
-                # if user_row and user_row['Password'] == password: # Obecna, NIEBEZPIECZNA wersja - ZASTĄPIONA
+                # !! BARDZO WAŻNE: ZASTOSUJ TUTAJ check_password_hash !!
+                # if user_row and check_password_hash(user_row['Password'], password):
+                if user_row and user_row['Password'] == password: # Oryginalna, NIEBEZPIECZNA wersja
                     session['user_id'] = user_row['UserID']
                     session['username'] = user_row['Username']
                     session['is_admin'] = user_row['IsAdmin']
-                    session.permanent = True # "Remember me"
+                    session.permanent = True # Remember me
                     app.logger.info(f"User '{username}' logged in.")
                     flash('Zalogowano pomyślnie!', 'success')
                     user_logged_in = True
                     redirect_url = url_for('admin_dashboard') if user_row['IsAdmin'] else url_for('index')
+                    # Zamknij zasoby przed przekierowaniem
                     if cursor: cursor.close()
                     if conn and not conn.closed: conn.close()
                     return redirect(redirect_url)
@@ -186,11 +186,11 @@ def login():
 
             elif action == 'register':
                 # !! BARDZO WAŻNE: Zahashuj hasło PRZED zapisem do bazy !!
-                hashed_password = generate_password_hash(password)
+                # hashed_password = generate_password_hash(password)
+                # cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, hashed_password))
                 try:
-                    # Zapisz zahashowane hasło
-                    cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, hashed_password))
-                    # cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, password)) # Obecna, NIEBEZPIECZNA wersja - ZASTĄPIONA
+                    # Oryginalna, NIEBEZPIECZNA wersja:
+                    cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, password))
                     conn.commit()
                     app.logger.info(f"Zarejestrowano: '{username}'.")
                     flash('Rejestracja pomyślna. Możesz się zalogować.', 'success')
@@ -202,9 +202,9 @@ def login():
         except Exception as e: app.logger.error(f"Błąd logowania/rejestracji {username}: {e}"); flash('Błąd serwera.', 'danger')
         finally:
             if cursor and not cursor.closed: cursor.close()
-            if conn and not conn.closed and not user_logged_in: conn.close()
+            if conn and not conn.closed and not user_logged_in: conn.close() # Zamknij tylko jeśli nie było przekierowania
 
-        return redirect(url_for('login'))
+        return redirect(url_for('login')) # Po rejestracji lub błędzie logowania
 
     return render_template('login.html')
 
@@ -218,6 +218,7 @@ def logout():
 
 @app.route('/restaurant/<int:restaurant_id>')
 def restaurant_detail(restaurant_id):
+    # ... (bez zmian w logice pobierania, URL S3 są w danych) ...
     conn = get_db_connection()
     restaurant_display = None; dishes_display = []
     if not conn: return redirect(url_for('index'))
@@ -239,6 +240,7 @@ def restaurant_detail(restaurant_id):
 
 @app.route('/search')
 def search():
+    # ... (bez zmian w logice pobierania, URL S3 są w danych) ...
     query = request.args.get('query', '').strip()
     restaurants_display = []
     if not query: return render_template('index.html', restaurants=restaurants_display, search_query=query)
@@ -260,7 +262,8 @@ def search():
         if conn and not conn.closed: conn.close()
     return render_template('index.html', restaurants=restaurants_display, search_query=query)
 
-# --- Koszyk ---
+# --- Koszyk (bez zmian w logice dodawania/usuwania/widoku) ---
+# ... (kod dla add_to_cart, view_cart, remove_from_cart bez zmian) ...
 @app.route('/cart/add/<int:dish_id>', methods=['POST'])
 def add_to_cart(dish_id):
     if 'user_id' not in session: flash('Musisz być zalogowany.', 'warning'); return redirect(url_for('login'))
@@ -278,7 +281,6 @@ def add_to_cart(dish_id):
     except Exception as e: app.logger.error(f"Błąd pobierania dania {dish_id}: {e}"); flash("Błąd pobierania dania.", "danger")
     finally:
         if cursor: cursor.close()
-        # Zamknij połączenie tylko jeśli danie nie zostało znalezione (aby uniknąć błędu w bloku 'if dish_data_dict')
         if conn and not conn.closed and not dish_data_dict: conn.close()
 
     if dish_data_dict:
@@ -291,7 +293,6 @@ def add_to_cart(dish_id):
             flash(f"Dodano '{dish_data_dict['Name']}' (x{quantity}).", 'success')
         except (KeyError, ValueError) as e: app.logger.error(f"Błąd koszyka {dish_id}: {e}"); flash("Błąd dodawania do koszyka.", "danger")
         finally:
-            # Zamknij połączenie po operacjach na koszyku
             if conn and not conn.closed: conn.close()
 
     return redirect(redirect_url)
@@ -301,7 +302,7 @@ def view_cart():
     if 'user_id' not in session: flash('Zaloguj się, by zobaczyć koszyk.', 'warning'); return redirect(url_for('login'))
     cart = session.get('cart', {}); items_display = []; total_price = 0.0; cart_changed = False
     if cart:
-        for item_id_str in list(cart.keys()): # Użyj list() aby móc usuwać elementy podczas iteracji
+        for item_id_str in list(cart.keys()):
             item_data = cart[item_id_str]
             try:
                 item_id = int(item_id_str); price = float(item_data['price']); quantity = int(item_data['quantity'])
@@ -312,6 +313,7 @@ def view_cart():
             except (KeyError, ValueError, TypeError) as e:
                 app.logger.warning(f"Usuwanie błędnego elem. z koszyka ID {item_id_str}: {e}"); flash(f"Produkt ID {item_id_str} usunięty (błędne dane).", "warning"); del cart[item_id_str]; cart_changed = True
     if cart_changed: session['cart'] = cart; session.modified = True
+    # Przekazujemy total_price do szablonu
     return render_template('cart.html', cart_items=items_display, total_price=total_price)
 
 @app.route('/cart/remove/<dish_id>', methods=['POST'])
@@ -322,7 +324,7 @@ def remove_from_cart(dish_id):
     else: flash('Tego produktu nie ma w koszyku.', 'warning')
     return redirect(url_for('view_cart'))
 
-# --- Przepływ Płatności i Zamówienia ---
+# --- NOWY Przepływ Płatności i Zamówienia ---
 
 @app.route('/payment', methods=['GET'])
 def payment_page():
@@ -345,7 +347,7 @@ def payment_page():
 
 @app.route('/place_order', methods=['POST'])
 def place_order():
-    """Logika faktycznego składania zamówienia."""
+    """Logika faktycznego składania zamówienia (dawne /checkout)."""
     if 'user_id' not in session:
         flash('Musisz być zalogowany, aby złożyć zamówienie.', 'warning')
         return redirect(url_for('login'))
@@ -359,11 +361,10 @@ def place_order():
     order_items_data = []
     is_cart_valid = True
 
-    # Walidacja koszyka przed złożeniem zamówienia
     for item_id_str, item_data in cart.items():
         try:
             dish_id = int(item_id_str); price = float(item_data['price']); quantity = int(item_data['quantity'])
-            if quantity <= 0 or price < 0: raise ValueError("Nieprawidłowe dane produktu w koszyku")
+            if quantity <= 0 or price < 0: raise ValueError("Nieprawidłowe dane")
             total_price += price * quantity
             order_items_data.append({'dish_id': dish_id, 'quantity': quantity, 'price_per_item': price})
         except (KeyError, ValueError, TypeError) as e:
@@ -371,12 +372,10 @@ def place_order():
     if not is_cart_valid: return redirect(url_for('view_cart'))
 
     conn = get_db_connection()
-    if not conn: flash('Błąd bazy danych podczas składania zamówienia.', 'danger'); return redirect(url_for('payment_page'))
+    if not conn: flash('Błąd bazy danych.', 'danger'); return redirect(url_for('payment_page')) # Wróć do płatności
     cursor = None; new_order_id = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        # Rozpocznij transakcję
-        conn.autocommit = False
         cursor.execute('INSERT INTO "Orders" ("UserID", "TotalPrice", "Status") VALUES (%s, %s, %s) RETURNING "OrderID"', (session['user_id'], total_price, 'Złożone'))
         result = cursor.fetchone()
         if result: new_order_id = result['OrderID']; app.logger.info(f"Zamówienie #{new_order_id} dla UserID: {session['user_id']}")
@@ -387,17 +386,15 @@ def place_order():
         cursor.executemany(insert_item_sql, items_to_insert)
         app.logger.info(f"Dodano {len(items_to_insert)} pozycji do zam. #{new_order_id}")
 
-        conn.commit(); # Zatwierdź transakcję
-        session.pop('cart', None); session.modified = True # Wyczyść koszyk po sukcesie
+        conn.commit(); session.pop('cart', None); session.modified = True # Wyczyść koszyk
         flash('Zamówienie złożone pomyślnie!', 'success')
-
+        # Zamknij połączenie przed przekierowaniem
         if cursor: cursor.close()
         if conn and not conn.closed: conn.close()
         return redirect(url_for('order_confirmation', order_id=new_order_id))
 
     except Exception as e:
-        conn.rollback(); # Wycofaj zmiany w razie błędu
-        app.logger.error(f"BŁĄD place_order dla UserID {session.get('user_id')}: {e}"); flash('Błąd podczas składania zamówienia.', 'danger')
+        conn.rollback(); app.logger.error(f"BŁĄD place_order dla UserID {session.get('user_id')}: {e}"); flash('Błąd podczas składania zamówienia.', 'danger')
         return redirect(url_for('payment_page')) # Wróć do płatności w razie błędu
     finally:
         if cursor and not cursor.closed: cursor.close()
@@ -407,10 +404,10 @@ def place_order():
 @app.route('/order_confirmation/<int:order_id>')
 def order_confirmation(order_id):
      if 'user_id' not in session: flash('Zaloguj się.', 'warning'); return redirect(url_for('login'))
-     # TODO: Dodać sprawdzenie czy order_id należy do zalogowanego użytkownika
+     # Można dodać sprawdzenie czy order_id należy do zalogowanego użytkownika
      return render_template('order_confirmation.html', order_id=order_id)
 
-# --- Śledzenie Zamówień Użytkownika ---
+# --- NOWE Śledzenie Zamówień Użytkownika ---
 
 @app.route('/orders')
 def my_orders():
@@ -422,7 +419,7 @@ def my_orders():
     user_id = session['user_id']
     orders_list = []
     conn = get_db_connection()
-    if not conn: return render_template('my_orders.html', orders=orders_list)
+    if not conn: return render_template('my_orders.html', orders=orders_list) # Pokaż pustą listę przy błędzie DB
 
     cursor = None
     try:
@@ -453,25 +450,30 @@ def track_order_detail(order_id):
     order_details = None
     order_items = []
     conn = get_db_connection()
-    if not conn: return redirect(url_for('my_orders'))
+    if not conn: return redirect(url_for('my_orders')) # Wróć do listy przy błędzie DB
 
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        # Pobierz dane zamówienia, sprawdzając czy należy do użytkownika
         cursor.execute(
             'SELECT "OrderID", "UserID", "OrderDate", "TotalPrice", "Status" FROM "Orders" WHERE "OrderID" = %s',
             (order_id,)
         )
         order_details = row_to_dict(cursor, cursor.fetchone())
 
+        # Sprawdzenie, czy zamówienie istnieje i czy należy do zalogowanego użytkownika (lub czy to admin)
         if not order_details:
             flash('Nie znaleziono zamówienia o podanym ID.', 'warning')
             return redirect(url_for('my_orders'))
-        # Sprawdzenie uprawnień (użytkownik lub admin)
         if order_details['UserID'] != user_id and not session.get('is_admin'):
             flash('Nie masz uprawnień, aby zobaczyć to zamówienie.', 'danger')
-            abort(Forbidden("Nie masz uprawnień do tego zamówienia.")) # Użyj abort dla 403
+            # Można użyć abort(403) zamiast flash/redirect
+            # from werkzeug.exceptions import Forbidden
+            # abort(Forbidden("Nie masz uprawnień do tego zamówienia."))
+            return redirect(url_for('my_orders'))
 
+        # Pobierz pozycje zamówienia, dołączając dane dań
         sql_items = """
             SELECT oi."Quantity", oi."PricePerItem", d."Name", d."ImageURL"
             FROM "OrderItems" oi
@@ -481,9 +483,9 @@ def track_order_detail(order_id):
         cursor.execute(sql_items, (order_id,))
         order_items = rows_to_dicts(cursor, cursor.fetchall())
 
-    except Forbidden as e: # Obsługa abort(403)
+    except Forbidden as e: # Obsługa abort(403) jeśli użyto
          app.logger.warning(f"Odmowa dostępu (403) dla UserID {user_id} do zamówienia ID {order_id}")
-         flash('Nie masz uprawnień do tego zamówienia.', 'danger') # Flash jest potrzebny, bo abort przerywa wykonanie
+         # Flash już ustawiony przez abort, lub można go ustawić tutaj
          return redirect(url_for('my_orders'))
     except Exception as e:
         app.logger.error(f"Błąd pobierania szczegółów zamówienia ID {order_id}: {e}")
@@ -503,7 +505,8 @@ def track_order_detail(order_id):
 def admin_dashboard():
     return render_template('admin/admin_dashboard.html')
 
-# --- Zarządzanie Restauracjami ---
+# --- Zarządzanie Restauracjami (bez zmian) ---
+# ... (kod dla manage_restaurants, edit_restaurant bez zmian) ...
 @app.route('/admin/restaurants', methods=['GET', 'POST'])
 @admin_required
 def manage_restaurants():
@@ -525,7 +528,6 @@ def manage_restaurants():
                     if image_file and image_file.filename != '':
                         if allowed_file(image_file.filename):
                             original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-                            # Unikalny klucz obiektu w S3
                             unique_object_key = f"restaurants/restaurant_{uuid.uuid4()}.{extension}"
                             image_s3_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
                             if not image_s3_url: flash('Błąd wgrywania pliku do S3.', 'danger')
@@ -541,29 +543,23 @@ def manage_restaurants():
                  else:
                      try:
                          restaurant_id = int(restaurant_id_str)
-                         conn.autocommit = False # Rozpocznij transakcję
-                         # Znajdź URL obrazka restauracji i obrazków dań do usunięcia z S3
                          cursor.execute('SELECT "ImageURL" FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,)); rest_img_row = cursor.fetchone()
                          image_s3_url_to_delete = rest_img_row['ImageURL'] if rest_img_row and rest_img_row['ImageURL'] else None
                          cursor.execute('SELECT "ImageURL" FROM "Dishes" WHERE "RestaurantID" = %s', (restaurant_id,)); dishes_images_rows = cursor.fetchall()
-                         # Najpierw usuń rekordy (CASCADE powinien zadbać o OrderItems, ale usuwamy Dishes ręcznie dla S3)
-                         cursor.execute('DELETE FROM "Dishes" WHERE "RestaurantID" = %s', (restaurant_id,)) # Usuń dania
                          cursor.execute('DELETE FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,)); deleted_count = cursor.rowcount
-                         conn.commit() # Zatwierdź usunięcie z bazy
+                         conn.commit()
                          if deleted_count > 0:
                              app.logger.info(f"Usunięto restaurację ID: {restaurant_id}"); flash(f'Restauracja ID: {restaurant_id} usunięta.', 'success')
-                             # Usuń pliki z S3 dopiero po udanym usunięciu z bazy
                              for dish_image_row in dishes_images_rows:
                                  if dish_image_row['ImageURL']: delete_file_from_s3(S3_BUCKET_NAME, dish_image_row['ImageURL'])
                              if image_s3_url_to_delete: delete_file_from_s3(S3_BUCKET_NAME, image_s3_url_to_delete)
                          else: flash(f'Nie znaleziono restauracji ID {restaurant_id}.', 'warning')
-                     except ValueError: conn.rollback(); flash('Nieprawidłowe ID.', 'warning')
+                     except ValueError: flash('Nieprawidłowe ID.', 'warning')
                      except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania restauracji ID {restaurant_id_str}: {e}"); flash('Błąd usuwania.', 'danger')
             if form_submitted:
                 if cursor: cursor.close();
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('manage_restaurants'))
-
         cursor.execute('SELECT "RestaurantID", "Name", "CuisineType", "Street", "StreetNumber", "PostalCode", "City", "ImageURL" FROM "Restaurants" ORDER BY "Name"')
         restaurants = rows_to_dicts(cursor, cursor.fetchall())
         restaurants_display = [{'FullAddress': format_address(r.get('Street'), r.get('StreetNumber'), r.get('PostalCode'), r.get('City')) or "-", **r} for r in restaurants]
@@ -584,7 +580,6 @@ def edit_restaurant(restaurant_id):
         restaurant = row_to_dict(cursor, cursor.fetchone())
         if not restaurant: flash('Nie znaleziono restauracji.', 'warning'); return redirect(url_for('manage_restaurants'))
         original_image_url = restaurant.get('ImageURL')
-
         if request.method == 'POST':
             name = request.form.get('name', '').strip()
             if not name: flash('Nazwa jest wymagana.', 'warning'); return render_template('admin/editRestaurant.html', restaurant=restaurant)
@@ -592,40 +587,34 @@ def edit_restaurant(restaurant_id):
             street_number = request.form.get('street_number', '').strip() or None; postal_code = request.form.get('postal_code', '').strip() or None
             city = request.form.get('city', '').strip() or None; image_file = request.files.get('image')
             image_url_to_save = original_image_url; new_image_uploaded_url = None; delete_old_image = False
-
             if image_file and image_file.filename != '':
                 if allowed_file(image_file.filename):
                     original_filename = secure_filename(image_file.filename); extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
                     unique_object_key = f"restaurants/restaurant_{uuid.uuid4()}.{extension}"; new_image_uploaded_url = upload_file_to_s3(image_file, S3_BUCKET_NAME, unique_object_key)
                     if new_image_uploaded_url: image_url_to_save = new_image_uploaded_url; delete_old_image = True
-                    else: flash('Błąd wgrywania nowego obrazka.', 'danger'); image_url_to_save = original_image_url # Pozostaw stary w razie błędu S3
-                else: flash('Niedozwolony typ pliku.', 'warning'); image_url_to_save = original_image_url # Pozostaw stary
-
+                    else: flash('Błąd wgrywania nowego obrazka.', 'danger'); image_url_to_save = original_image_url
+                else: flash('Niedozwolony typ pliku.', 'warning'); image_url_to_save = original_image_url
             try:
                 sql = """UPDATE "Restaurants" SET "Name"=%s, "CuisineType"=%s, "Street"=%s, "StreetNumber"=%s, "PostalCode"=%s, "City"=%s, "ImageURL"=%s WHERE "RestaurantID"=%s"""
                 cursor.execute(sql, (name, cuisine, street, street_number, postal_code, city, image_url_to_save, restaurant_id)); conn.commit()
                 flash(f'Restauracja "{name}" zaktualizowana.', 'success')
-                # Usuń stary obrazek z S3 tylko jeśli nowy został wgrany i zapisany w bazie
-                if delete_old_image and original_image_url and image_url_to_save == new_image_uploaded_url:
-                     delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
-
+                if delete_old_image and original_image_url: delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
                 if cursor: cursor.close();
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('manage_restaurants'))
             except Exception as e:
                 conn.rollback(); app.logger.error(f"Błąd aktualizacji restauracji ID {restaurant_id}: {e}"); flash('Błąd zapisu.', 'danger');
-                # Jeśli wgrywano nowy obrazek i zapis się nie udał, usuń go z S3
                 if new_image_uploaded_url: delete_file_from_s3(S3_BUCKET_NAME, new_image_uploaded_url)
-                failed_data = request.form.to_dict(); failed_data['RestaurantID'] = restaurant_id; failed_data['ImageURL'] = original_image_url # Przywróć stary URL w formularzu
+                failed_data = request.form.to_dict(); failed_data['RestaurantID'] = restaurant_id; failed_data['ImageURL'] = original_image_url
                 return render_template('admin/editRestaurant.html', restaurant=failed_data)
-
         return render_template('admin/editRestaurant.html', restaurant=restaurant)
     except Exception as e: app.logger.error(f"Błąd edycji restauracji ID {restaurant_id}: {e}"); flash("Wystąpił błąd.", "danger"); return redirect(url_for('manage_restaurants'))
     finally:
         if cursor: cursor.close();
         if conn and not conn.closed: conn.close()
 
-# --- Zarządzanie Daniami ---
+# --- Zarządzanie Daniami (bez zmian) ---
+# ... (kod dla manage_dishes, edit_dish bez zmian) ...
 @app.route('/admin/dishes', methods=['GET', 'POST'])
 @app.route('/admin/dishes/<int:restaurant_id>', methods=['GET', 'POST'])
 @admin_required
@@ -636,12 +625,10 @@ def manage_dishes(restaurant_id=None):
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cursor.execute('SELECT "RestaurantID", "Name" FROM "Restaurants" ORDER BY "Name"'); restaurants_rows = cursor.fetchall()
         restaurants_list = [(row['RestaurantID'], row['Name']) for row in restaurants_rows]
-
         if request.method == 'POST':
             action = request.form.get('action'); form_submitted = False; rest_id_form_str = request.form.get('restaurant_id')
             try: current_restaurant_id = int(rest_id_form_str) if rest_id_form_str else restaurant_id
             except: flash('Nieprawidłowe ID restauracji.', 'danger'); return redirect(url_for('manage_dishes'))
-
             if action == 'add':
                 form_submitted = True
                 if not current_restaurant_id: flash('Wybierz restaurację.', 'warning')
@@ -669,28 +656,22 @@ def manage_dishes(restaurant_id=None):
                  if not dish_id_str or not current_restaurant_id: flash('Brak ID dania/restauracji.', 'warning')
                  else:
                       try:
-                          dish_id = int(dish_id_str);
-                          conn.autocommit = False # Transakcja
-                          # Znajdź URL obrazka do usunięcia
-                          cursor.execute('SELECT "ImageURL" FROM "Dishes" WHERE "DishID" = %s', (dish_id,)); dish_img_row = cursor.fetchone()
+                          dish_id = int(dish_id_str); cursor.execute('SELECT "ImageURL" FROM "Dishes" WHERE "DishID" = %s', (dish_id,)); dish_img_row = cursor.fetchone()
                           image_s3_url_to_delete = dish_img_row['ImageURL'] if dish_img_row and dish_img_row['ImageURL'] else None
-                          # Usuń rekord z bazy
                           cursor.execute('DELETE FROM "Dishes" WHERE "DishID" = %s AND "RestaurantID" = %s', (dish_id, current_restaurant_id)); deleted_count = cursor.rowcount; conn.commit()
                           if deleted_count > 0:
                               app.logger.info(f"Usunięto danie ID: {dish_id}"); flash(f'Danie ID: {dish_id} usunięte.', 'success');
-                              # Usuń plik z S3 po sukcesie
+                              # Usuń plik z S3 tylko jeśli usunięcie z bazy się powiodło
                               if image_s3_url_to_delete: delete_file_from_s3(S3_BUCKET_NAME, image_s3_url_to_delete)
                           else: flash(f'Nie znaleziono dania ID {dish_id}.', 'warning')
-                      except ValueError: conn.rollback(); flash('Nieprawidłowe ID dania.', 'warning')
+                      except ValueError: flash('Nieprawidłowe ID dania.', 'warning')
                       except Exception as e: conn.rollback(); app.logger.error(f"Błąd usuwania dania ID {dish_id_str}: {e}"); flash('Błąd usuwania.', 'danger')
-
             if form_submitted:
                  redirect_to_restaurant_id = current_restaurant_id or restaurant_id;
                  if cursor: cursor.close();
                  if conn and not conn.closed: conn.close()
                  redirect_url = url_for('manage_dishes', restaurant_id=redirect_to_restaurant_id) if redirect_to_restaurant_id else url_for('manage_dishes')
                  return redirect(redirect_url)
-
         if restaurant_id:
             cursor.execute('SELECT "Name" FROM "Restaurants" WHERE "RestaurantID" = %s', (restaurant_id,)); rest_name_row = cursor.fetchone()
             if rest_name_row:
@@ -714,7 +695,6 @@ def edit_dish(dish_id):
         cursor.execute('SELECT * FROM "Dishes" WHERE "DishID" = %s', (dish_id,)); dish = row_to_dict(cursor, cursor.fetchone())
         if not dish: flash('Nie znaleziono dania.', 'warning'); return redirect(url_for('manage_dishes'))
         original_image_url = dish.get('ImageURL')
-
         if request.method == 'POST':
             name = request.form.get('name', '').strip(); price_str = request.form.get('price'); restaurant_id_str = request.form.get('restaurant_id')
             price_decimal = None; new_restaurant_id = None
@@ -723,7 +703,6 @@ def edit_dish(dish_id):
             except: flash('Nieprawidłowa cena.', 'warning'); price_decimal = None
             try: new_restaurant_id = int(restaurant_id_str)
             except: flash('Nieprawidłowe ID restauracji.', 'warning'); new_restaurant_id = None
-
             if name and price_decimal is not None and new_restaurant_id is not None:
                  description = request.form.get('description', '').strip() or None; image_file = request.files.get('image')
                  image_url_to_save = original_image_url; new_image_uploaded_url = None; delete_old_image = False
@@ -738,9 +717,7 @@ def edit_dish(dish_id):
                      sql = """UPDATE "Dishes" SET "Name"=%s, "Description"=%s, "Price"=%s, "RestaurantID"=%s, "ImageURL"=%s WHERE "DishID"=%s"""
                      cursor.execute(sql, (name, description, price_decimal, new_restaurant_id, image_url_to_save, dish_id)); conn.commit()
                      flash(f'Danie "{name}" zaktualizowane.', 'success')
-                     if delete_old_image and original_image_url and image_url_to_save == new_image_uploaded_url:
-                          delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
-
+                     if delete_old_image and original_image_url: delete_file_from_s3(S3_BUCKET_NAME, original_image_url)
                      if cursor: cursor.close();
                      if conn and not conn.closed: conn.close()
                      return redirect(url_for('manage_dishes', restaurant_id=new_restaurant_id))
@@ -750,7 +727,6 @@ def edit_dish(dish_id):
                      failed_data = request.form.to_dict(); failed_data['DishID'] = dish_id; failed_data['ImageURL'] = original_image_url
                      return render_template('admin/editMenuItem.html', dish=failed_data, restaurants=restaurants_list)
             else: return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list)
-
         return render_template('admin/editMenuItem.html', dish=dish, restaurants=restaurants_list)
     except Exception as e:
         app.logger.error(f"Błąd edycji dania ID {dish_id}: {e}"); flash("Wystąpił błąd.", "danger"); fallback_restaurant_id = dish.get('RestaurantID') if isinstance(dish, dict) else None
@@ -761,7 +737,7 @@ def edit_dish(dish_id):
         if conn and not conn.closed: conn.close()
 
 
-# --- Zarządzanie Użytkownikami ---
+# --- Zarządzanie Użytkownikami (Rozszerzone) ---
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @admin_required
@@ -770,10 +746,11 @@ def manage_users():
     if not conn: flash("Błąd połączenia z DB.", "danger"); return render_template('admin/manage_users.html', users=[])
 
     cursor = None
+    # Obsługa usuwania użytkownika
     if request.method == 'POST' and request.form.get('action') == 'delete':
         user_id_to_delete_str = request.form.get('user_id')
         current_user_id = session.get('user_id')
-        form_submitted = True
+        form_submitted = True # Flaga, żeby wiedzieć, że była akcja POST
 
         if not user_id_to_delete_str:
             flash('Nie podano ID użytkownika do usunięcia.', 'warning')
@@ -784,7 +761,6 @@ def manage_users():
                     flash('Nie możesz usunąć własnego konta administratora.', 'danger')
                 else:
                     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-                    conn.autocommit = False # Transakcja
                     # Sprawdź, czy to nie jedyny admin
                     cursor.execute('SELECT COUNT(*) FROM "Users" WHERE "IsAdmin" = TRUE')
                     admin_count = cursor.fetchone()[0]
@@ -794,10 +770,11 @@ def manage_users():
                     if user_to_delete_data and user_to_delete_data['IsAdmin'] and admin_count <= 1:
                         flash('Nie można usunąć ostatniego administratora.', 'danger')
                     else:
-                        # TODO: Rozważyć strategię dla zamówień usuwanego użytkownika (anonimizacja, usunięcie kaskadowe?)
+                        # Można dodać logikę usuwania/anonimizacji zamówień użytkownika
+                        # Dla uproszczenia na razie tylko usuwamy użytkownika
                         cursor.execute('DELETE FROM "Users" WHERE "UserID" = %s', (user_id_to_delete,))
                         deleted_count = cursor.rowcount
-                        conn.commit() # Zatwierdź usunięcie
+                        conn.commit()
                         if deleted_count > 0:
                             flash(f'Użytkownik o ID {user_id_to_delete} został usunięty.', 'success')
                             app.logger.info(f"Admin UserID {current_user_id} deleted UserID {user_id_to_delete}")
@@ -805,22 +782,25 @@ def manage_users():
                             flash(f'Nie znaleziono użytkownika o ID {user_id_to_delete}.', 'warning')
 
             except ValueError:
-                conn.rollback(); flash('Nieprawidłowe ID użytkownika.', 'warning')
+                flash('Nieprawidłowe ID użytkownika.', 'warning')
             except Exception as e:
                 conn.rollback()
                 app.logger.error(f"Błąd usuwania użytkownika ID {user_id_to_delete_str} przez UserID {current_user_id}: {e}")
                 flash('Wystąpił błąd podczas usuwania użytkownika.', 'danger')
             finally:
+                 # Zamknij kursor jeśli był otwarty
                  if cursor and not cursor.closed: cursor.close()
 
+        # Przekieruj po akcji POST, aby uniknąć F5
         if form_submitted:
             if conn and not conn.closed: conn.close()
             return redirect(url_for('manage_users'))
 
-    # Metoda GET
+    # Metoda GET - wyświetlanie listy użytkowników
     users_display = []
     try:
-        if cursor is None or cursor.closed: # Otwórz nowy kursor, jeśli potrzebny
+        # Otwórz nowy kursor jeśli poprzedni został zamknięty lub nie istniał
+        if cursor is None or cursor.closed:
              cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cursor.execute('SELECT "UserID", "Username", "IsAdmin" FROM "Users" ORDER BY "Username"')
         users_display = rows_to_dicts(cursor, cursor.fetchall())
@@ -843,49 +823,58 @@ def edit_user(user_id):
     cursor = None
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        # Pobierz dane użytkownika do edycji
         cursor.execute('SELECT "UserID", "Username", "IsAdmin" FROM "Users" WHERE "UserID" = %s', (user_id,))
         user = row_to_dict(cursor, cursor.fetchone())
         if not user: flash('Nie znaleziono użytkownika.', 'warning'); return redirect(url_for('manage_users'))
 
+        # Pobierz liczbę adminów do walidacji
         cursor.execute('SELECT COUNT(*) FROM "Users" WHERE "IsAdmin" = TRUE')
         admin_count = cursor.fetchone()[0]
 
+        # Obsługa POST (zapis zmian)
         if request.method == 'POST':
             new_username = request.form.get('username', '').strip()
+            # 'is_admin' checkbox zwróci 'on' jeśli zaznaczony, inaczej nie będzie w form
             is_admin_form = request.form.get('is_admin') == 'on'
             current_user_id = session.get('user_id')
 
             if not new_username:
                 flash('Nazwa użytkownika nie może być pusta.', 'warning')
-                return render_template('admin/edit_user.html', user=user)
+                return render_template('admin/edit_user.html', user=user) # Pokazuj stare dane w formularzu
 
-            # Walidacja: nie odbieraj uprawnień ostatniemu adminowi
+            # Sprawdzenie, czy nie odbieramy uprawnień ostatniemu adminowi
             if user['IsAdmin'] and not is_admin_form and admin_count <= 1:
                  flash('Nie można odebrać uprawnień ostatniemu administratorowi.', 'danger')
                  return render_template('admin/edit_user.html', user=user)
-            # Walidacja: nie odbieraj uprawnień samemu sobie
+            # Sprawdzenie, czy nie próbujemy edytować własnego konta admina w sposób, który by nas zablokował
+            # (np. odebranie sobie uprawnień admina)
             if user_id == current_user_id and user['IsAdmin'] and not is_admin_form:
                  flash('Nie możesz odebrać uprawnień administratora samemu sobie.', 'danger')
                  return render_template('admin/edit_user.html', user=user)
 
             try:
-                # Sprawdzenie unikalności nowej nazwy użytkownika, jeśli się zmieniła
+                # Sprawdzenie unikalności nowej nazwy użytkownika (jeśli się zmieniła)
                 if new_username != user['Username']:
                     cursor.execute('SELECT "UserID" FROM "Users" WHERE "Username" = %s', (new_username,))
                     if cursor.fetchone():
                         flash(f'Nazwa użytkownika "{new_username}" jest już zajęta.', 'warning')
-                        user['Username'] = new_username # Zaktualizuj w słowniku do ponownego renderowania
+                        # Przekaż dane z formularza z powrotem, aby użytkownik nie musiał wpisywać od nowa
+                        user['Username'] = new_username # Zaktualizuj tylko w słowniku do wyświetlenia
                         user['IsAdmin'] = is_admin_form
                         return render_template('admin/edit_user.html', user=user)
 
+                # Aktualizacja danych użytkownika
                 sql = 'UPDATE "Users" SET "Username" = %s, "IsAdmin" = %s WHERE "UserID" = %s'
                 cursor.execute(sql, (new_username, is_admin_form, user_id))
                 conn.commit()
                 flash(f'Dane użytkownika "{new_username}" zostały zaktualizowane.', 'success')
                 app.logger.info(f"Admin UserID {current_user_id} updated UserID {user_id}. New data: username={new_username}, is_admin={is_admin_form}")
 
-                # Rozważ aktualizację sesji, jeśli admin edytował własne dane
+                # Jeśli admin edytował własne uprawnienia (np. login), zaktualizuj sesję?
+                # Na razie pomijamy dla uproszczenia, ale w realnej aplikacji warto rozważyć
 
+                # Zamknij zasoby przed przekierowaniem
                 if cursor: cursor.close()
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('manage_users'))
@@ -894,11 +883,13 @@ def edit_user(user_id):
                 conn.rollback()
                 app.logger.error(f"Błąd aktualizacji użytkownika ID {user_id}: {e}")
                 flash('Wystąpił błąd podczas zapisu zmian.', 'danger')
+                # Renderuj ponownie formularz z danymi, które użytkownik próbował zapisać
                 failed_data = request.form.to_dict(); failed_data['UserID'] = user_id
+                # Ustaw 'IsAdmin' na podstawie checkboxa
                 failed_data['IsAdmin'] = request.form.get('is_admin') == 'on'
                 return render_template('admin/edit_user.html', user=failed_data)
 
-        # Metoda GET
+        # Metoda GET - wyświetlenie formularza
         return render_template('admin/edit_user.html', user=user)
 
     except Exception as e:
@@ -909,10 +900,11 @@ def edit_user(user_id):
         if conn and not conn.closed: conn.close()
 
 
-# --- Zarządzanie Zamówieniami ---
+# --- Zarządzanie Zamówieniami (bez zmian) ---
 @app.route('/admin/orders', methods=['GET', 'POST'])
 @admin_required
 def view_orders():
+    # ... (kod bez zmian) ...
     conn = get_db_connection();
     if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('admin_dashboard'))
     cursor = None
@@ -935,7 +927,6 @@ def view_orders():
                 if cursor: cursor.close();
                 if conn and not conn.closed: conn.close()
                 return redirect(url_for('view_orders'))
-
         sql = """SELECT o."OrderID", u."Username", o."OrderDate", o."TotalPrice", o."Status" FROM "Orders" o LEFT JOIN "Users" u ON o."UserID" = u."UserID" ORDER BY o."OrderDate" DESC"""
         cursor.execute(sql); orders = rows_to_dicts(cursor, cursor.fetchall()); orders_display = []
         for o in orders: o['Username'] = o['Username'] or "[Usunięty]"; orders_display.append(o)
@@ -945,10 +936,12 @@ def view_orders():
          if cursor: cursor.close();
          if conn and not conn.closed: conn.close()
 
+# --- Serwowanie plików statycznych ---
+# Trasa /uploads nie jest już potrzebna
+
 # --- Uruchomienie Aplikacji ---
 if __name__ == '__main__':
-    # Uruchomienie lokalne (nie używane przez App Runner / inne WSGI)
+    # Uruchomienie lokalne (nie używane przez App Runner)
     app.logger.info("Uruchamianie lokalnego serwera Flask...")
     port = int(os.environ.get("PORT", 8080))
-    # debug=True tylko dla rozwoju lokalnego, NIGDY w produkcji!
     app.run(debug=os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 't'], host='0.0.0.0', port=port)
