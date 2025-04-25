@@ -37,7 +37,7 @@
   
   /* Styl dla logo w navbarze */
   .navbar-brand img.logo {
-    max-height: 40px; /* Dostosuj wysokość logo */
+    max-height: 60px; /* Dostosuj wysokość logo */
     margin-right: 10px;
     vertical-align: middle;
   }
