@@ -2,18 +2,22 @@
 {% block title %}Znajdź Restaurację - PapuGO{% endblock %}
 
 {% block content %}
-    <div class="p-4 mb-4 bg-success-subtle text-success-emphasis rounded-3 shadow-sm border border-success-subtle">
+    {# Zmodyfikowany baner z tłem i ikoną zamiast przycisku tekstowego #}
+    <div class="p-4 mb-4 bg-success-subtle text-success-emphasis rounded-3 shadow-sm border border-success-subtle" style="background-image: url('{{ url_for('static', filename='https://papugo-storage.s3.eu-central-1.amazonaws.com/Gemini_Generated_Image_lm24q7lm24q7lm24.jpg') }}'); background-size: cover; background-position: center; background-color: rgba(204, 231, 213, 0.8); background-blend-mode: lighten;">
         <div class="container-fluid py-3">
             <div class="d-flex justify-content-between align-items-center">
-                <h1 class="display-6 fw-bold">
+                <h1 class="display-6 fw-bold" style="color: #0a3622;"> {# Ciemniejszy tekst dla kontrastu #}
                     {% if search_query %}Wyniki dla: "{{ search_query }}"{% else %}Zamów jedzenie z najlepszych restauracji!{% endif %}
                 </h1>
-                <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#bannerCollapseContent" aria-expanded="true" aria-controls="bannerCollapseContent">
-                    <i class="bi bi-chevron-up"></i> Zwiń/Rozwiń
+                {# Przycisk zastąpiony ikoną #}
+                <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#bannerCollapseContent" aria-expanded="true" aria-controls="bannerCollapseContent" style="border-color: #0a3622;"> {# Ciemniejsza ramka przycisku #}
+                    <i class="bi bi-chevron-up" style="color: #0a3622;"></i> {# Ciemniejsza ikona #}
                 </button>
             </div>
              <div class="collapse show" id="bannerCollapseContent">
-                <p class="col-md-8 fs-5 mt-3">Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej, aby znaleźć coś dla siebie.</p>
+                <p class="col-md-8 fs-5 mt-3" style="color: #0a3622;"> {# Ciemniejszy tekst dla kontrastu #}
+                    Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej, aby znaleźć coś dla siebie.
+                </p>
                  {% if search_query and not restaurants %}
                  <a href="{{ url_for('index') }}" class="btn btn-success btn-lg mt-2" type="button">Wyczyść wyszukiwanie</a>
                  {% endif %}
@@ -29,6 +33,7 @@
                         {% if restaurant.ImageURL %}
                             <img src="{{ restaurant.ImageURL }}" class="card-img-top" alt="{{ restaurant.Name }}">
                         {% else %}
+                            {# Zakładamy, że placeholder jest w static #}
                             <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" class="card-img-top" alt="Brak zdjęcia">
                         {% endif %}
                         <div class="card-body">
