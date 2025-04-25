@@ -1,8 +1,24 @@
 {% extends "layout.html" %}
 {% block title %}Zamówienie złożone{% endblock %}
 {% block content %}
-<h1>Dziękujemy za złożenie zamówienia!</h1>
-<p>Twoje zamówienie o numerze <strong>#{{ order_id }}</strong> zostało przyjęte.</p>
-<p>Możesz śledzić status zamówienia na swoim koncie (funkcjonalność do dodania).</p>
-<p><a href="{{ url_for('index') }}" class="btn btn-primary">Wróć na stronę główną</a></p>
+<div class="container mt-5 text-center">
+    <div class="alert alert-success" role="alert">
+        <h1 class="alert-heading"><i class="bi bi-check-circle-fill me-2"></i> Dziękujemy za złożenie zamówienia!</h1>
+        <p class="lead">Twoje zamówienie o numerze <strong>#{{ order_id }}</strong> zostało przyjęte i jest przetwarzane.</p>
+        <hr>
+        <p class="mb-0">Możesz sprawdzić jego status i szczegóły, klikając poniższy przycisk.</p>
+    </div>
+
+    <div class="mt-4">
+        <a href="{{ url_for('track_order_detail', order_id=order_id) }}" class="btn btn-info btn-lg me-2">
+            <i class="bi bi-eye-fill me-1"></i> Śledź zamówienie #{{ order_id }}
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+           <i class="bi bi-house-door-fill me-1"></i> Wróć na stronę główną
+        </a>
+         <a href="{{ url_for('my_orders') }}" class="btn btn-secondary btn-lg ms-2">
+           <i class="bi bi-list-ul me-1"></i> Wszystkie moje zamówienia
+        </a>
+    </div>
+</div>
 {% endblock %}

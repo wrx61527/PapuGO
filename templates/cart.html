@@ -1,51 +1,60 @@
 {% extends "layout.html" %}
 {% block title %}Koszyk{% endblock %}
 {% block content %}
-<h1>Twój Koszyk</h1>
+<div class="container mt-4">
+    <h1 class="mb-4">Twój Koszyk</h1>
 
-{% if cart_items %}
-<table class="table">
-    <thead>
-        <tr>
-            <th>Produkt</th>
-            <th>Ilość</th>
-            <th>Cena jednostkowa</th>
-            <th>Suma</th>
-            <th>Akcja</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for item in cart_items %}
-        <tr>
-            <td>{{ item.name }}</td>
-            <td>{{ item.quantity }}</td>
-            <td>{{ "%.2f"|format(item.price) }} zł</td>
-            <td>{{ "%.2f"|format(item.total) }} zł</td>
-            <td>
-                <form method="POST" action="{{ url_for('remove_from_cart', dish_id=item.id) }}" style="display: inline;">
-                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-    <tfoot>
-        <tr>
-            <td colspan="3" class="text-end"><strong>Suma:</strong></td>
-            <td><strong>{{ "%.2f"|format(total_price) }} zł</strong></td>
-            <td></td>
-        </tr>
-    </tfoot>
-</table>
+    {% if cart_items %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Produkt</th>
+                    <th class="text-center">Ilość</th>
+                    <th class="text-end">Cena jedn.</th>
+                    <th class="text-end">Suma</th>
+                    <th class="text-center">Akcja</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cart_items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-end">{{ "%.2f"|format(item.price) }} zł</td>
+                    <td class="text-end">{{ "%.2f"|format(item.total) }} zł</td>
+                    <td class="text-center">
+                        <form method="POST" action="{{ url_for('remove_from_cart', dish_id=item.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Usuń z koszyka">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" class="text-end fs-5"><strong>Suma całkowita:</strong></td>
+                    <td class="text-end fs-5"><strong>{{ "%.2f"|format(total_price) }} zł</strong></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 
-<div class="text-end">
-    <form method="POST" action="{{ url_for('checkout') }}">
-        <button type="submit" class="btn btn-success btn-lg">Przejdź do płatności (Złóż zamówienie)</button>
-    </form>
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kontynuuj zakupy</a>
+        <form method="GET" action="{{ url_for('payment_page') }}">
+            <button type="submit" class="btn btn-success btn-lg">Przejdź do płatności <i class="bi bi-arrow-right"></i></button>
+        </form>
+    </div>
+
+    {% else %}
+    <div class="alert alert-info text-center" role="alert">
+        <p class="lead mb-0">Twój koszyk jest pusty.</p>
+    </div>
+    <p class="text-center mt-3"><a href="{{ url_for('index') }}" class="btn btn-primary">Przeglądaj restauracje</a></p>
+    {% endif %}
 </div>
-
-{% else %}
-<p>Twój koszyk jest pusty.</p>
-<p><a href="{{ url_for('index') }}">Przeglądaj restauracje</a></p>
-{% endif %}
 {% endblock %}

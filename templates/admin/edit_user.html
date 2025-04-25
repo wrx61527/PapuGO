@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block title %}Edytuj Użytkownika{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Edytuj Użytkownika: {{ user.Username }} (ID: {{ user.UserID }})</h1>
+
+    <form method="POST" action="{{ url_for('edit_user', user_id=user.UserID) }}">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="username" class="form-label">Nazwa użytkownika*</label>
+                    <input type="text" class="form-control" id="username" name="username" value="{{ user.Username }}" required>
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin" {% if user.IsAdmin %}checked{% endif %}>
+                    <label class="form-check-label" for="is_admin">Uprawnienia administratora</label>
+                </div>
+
+                <small class="text-muted d-block mb-3">* Nazwa użytkownika jest wymagana.</small>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-1"></i> Anuluj</a>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill me-2"></i> Zapisz zmiany</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

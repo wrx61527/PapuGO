@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{% block title %}Zamówienie #{{ order.OrderID }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">Szczegóły Zamówienia #{{ order.OrderID }}</h1>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header fs-5">
+            Podsumowanie
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Data złożenia:</strong> {{ order.OrderDate.strftime('%Y-%m-%d %H:%M:%S') if order.OrderDate else '-' }}</p>
+                    <p><strong>Suma całkowita:</strong> {{ "%.2f"|format(order.TotalPrice) }} zł</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Status:</strong>
+                        <span class="badge fs-6 rounded-pill
+                            {% if order.Status == 'Złożone' %}bg-primary
+                            {% elif order.Status == 'W realizacji' %}bg-warning text-dark
+                            {% elif order.Status == 'Dostarczone' %}bg-success
+                            {% elif order.Status == 'Anulowane' %}bg-secondary
+                            {% else %}bg-light text-dark{% endif %}">
+                            {{ order.Status }}
+                        </span>
+                    </p>
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="mb-3">Zamówione produkty</h2>
+    {% if items %}
+    <div class="list-group">
+        {% for item in items %}
+        <div class="list-group-item mb-2 rounded shadow-sm">
+            <div class="row align-items-center">
+                <div class="col-md-2 col-sm-3 text-center">
+                     {% if item.ImageURL %}
+                        <img src="{{ item.ImageURL }}" alt="{{ item.Name }}" class="img-fluid rounded" style="max-height: 75px; max-width: 100px; object-fit: cover;">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Brak zdjęcia" class="img-fluid rounded" style="max-height: 75px; max-width: 100px; object-fit: contain; opacity: 0.6;">
+                    {% endif %}
+                </div>
+                <div class="col-md-6 col-sm-9">
+                    <h5 class="mb-1">{{ item.Name }}</h5>
+                    <small class="text-muted">Ilość: {{ item.Quantity }}</small>
+                </div>
+                <div class="col-md-4 col-sm-12 text-md-end mt-2 mt-md-0">
+                    Cena: {{ item.Quantity }} x {{ "%.2f"|format(item.PricePerItem) }} zł = <strong>{{ "%.2f"|format(item.Quantity * item.PricePerItem) }} zł</strong>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-warning" role="alert">
+        Brak informacji o produktach w tym zamówieniu.
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('my_orders') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Wróć do listy zamówień</a>
+    </div>
+
+</div>
+{% endblock %}

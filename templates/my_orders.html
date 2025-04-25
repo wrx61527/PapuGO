@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}Moje Zamówienia{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Moje Zamówienia</h1>
+
+    {% if orders %}
+    <div class="list-group shadow-sm">
+        {% for order in orders %}
+        <a href="{{ url_for('track_order_detail', order_id=order.OrderID) }}" class="list-group-item list-group-item-action flex-column align-items-start mb-2 rounded">
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">Zamówienie #{{ order.OrderID }}</h5>
+                <small class="text-muted">{{ order.OrderDate.strftime('%Y-%m-%d %H:%M') if order.OrderDate else '-' }}</small>
+            </div>
+            <p class="mb-1">
+                Status:
+                <span class="badge rounded-pill
+                    {% if order.Status == 'Złożone' %}bg-primary
+                    {% elif order.Status == 'W realizacji' %}bg-warning text-dark
+                    {% elif order.Status == 'Dostarczone' %}bg-success
+                    {% elif order.Status == 'Anulowane' %}bg-secondary
+                    {% else %}bg-light text-dark{% endif %}">
+                    {{ order.Status }}
+                </span>
+            </p>
+            <small>Suma: {{ "%.2f"|format(order.TotalPrice) }} zł</small>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+     <div class="alert alert-info" role="alert">
+        Nie masz jeszcze żadnych złożonych zamówień.
+        <a href="{{ url_for('index') }}" class="alert-link">Przeglądaj restauracje</a>!
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
