@@ -111,7 +111,7 @@ def row_to_dict(cursor, row):
     return dict(row) if row else None
 
 # --- Funkcje Pomocnicze S3 ---
-def upload_file_to_s3(file, bucket_name, object_name=None, acl="public-read"):
+def upload_file_to_s3(file, bucket_name, object_name=None): # Usunięto domyślne acl="public-read"
     """Wgrywa plik (obiekt plikopodobny) do bucketa S3"""
     if not s3_client:
         app.logger.error("Klient S3 nie jest skonfigurowany. Nie można wgrać pliku.")
@@ -120,11 +120,17 @@ def upload_file_to_s3(file, bucket_name, object_name=None, acl="public-read"):
         app.logger.warning("Próba wgrania pustego pliku.")
         return None
 
-    # Generuj nazwę obiektu w S3 jeśli nie podano
     if object_name is None:
         original_filename = secure_filename(file.filename)
         extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-        object_name = f"uploads/{uuid.uuid4()}.{extension}" # Domyślny folder 'uploads' w S3
+        # Używajmy bardziej ogólnej ścieżki lub rozdzielajmy wg typu
+        # np. object_name = f"uploads/{uuid.uuid4()}.{extension}"
+        # Albo zachowajmy poprzednią logikę, jeśli jest potrzebna
+        if 'restaurants/' in file.filename or 'dishes/' in file.filename: # Proste sprawdzenie, można ulepszyć
+             object_name = f"{'restaurants' if 'restaurants/' in file.filename else 'dishes'}/{uuid.uuid4()}.{extension}"
+        else: # Domyślna ścieżka
+             object_name = f"uploads/{uuid.uuid4()}.{extension}"
+
 
     try:
         # Używamy upload_fileobj dla obiektów plikopodobnych z Flaska
@@ -133,16 +139,19 @@ def upload_file_to_s3(file, bucket_name, object_name=None, acl="public-read"):
             bucket_name,
             object_name,
             ExtraArgs={
-                "ACL": acl, # Ustawienie ACL, aby plik był publicznie odczytywalny
-                "ContentType": file.content_type # Ważne dla poprawnego wyświetlania w przeglądarce
+                # USUNIĘTO LINIĘ: "ACL": acl,
+                "ContentType": file.content_type # Nadal ważne
             }
         )
         # Konstruujemy pełny URL pliku
-        file_url = f"{S3_LOCATION}{object_name}"
+        file_url = f"{S3_LOCATION}{object_name}" # S3_LOCATION powinno być zdefiniowane globalnie
         app.logger.info(f"Plik {object_name} wgrany do S3: {file_url}")
         return file_url # Zwracamy pełny URL
     except ClientError as e:
         app.logger.error(f"Błąd wgrywania pliku '{object_name}' do S3: {e}")
+        # Dodajmy logowanie kodu błędu dla lepszej diagnostyki
+        error_code = e.response.get('Error', {}).get('Code')
+        app.logger.error(f"Kod błędu S3: {error_code}")
         return None
     except Exception as e:
          app.logger.error(f"Nieoczekiwany błąd podczas wgrywania pliku do S3: {e}")
