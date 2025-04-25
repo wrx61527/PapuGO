@@ -154,17 +154,10 @@ def login():
                 user_row = row_to_dict(cursor, cursor.fetchone())
 
                 # !! BARDZO WAŻNE: UŻYJ check_password_hash !!
-                if user_row and check_password_hash(user_row['Password'], password):
+                if user_row and check_password_hash(user_row['Password'], password): # <-- TUTAJ JEST ZMIANA
+                    # ... reszta logiki logowania ...
                     session['user_id'] = user_row['UserID']
-                    session['username'] = user_row['Username']
-                    session['is_admin'] = user_row['IsAdmin']
-                    session.permanent = True
-                    app.logger.info(f"User '{username}' logged in.")
-                    flash('Zalogowano pomyślnie!', 'success')
-                    user_logged_in = True
-                    redirect_url = url_for('admin_dashboard') if user_row['IsAdmin'] else url_for('index')
-                    if cursor: cursor.close()
-                    if conn and not conn.closed: conn.close()
+                    # ...
                     return redirect(redirect_url)
                 else:
                     flash('Nieprawidłowa nazwa użytkownika lub hasło.', 'danger')
