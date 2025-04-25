@@ -2,7 +2,7 @@
 {% block title %}Koszyk{% endblock %}
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Twój Koszyk</h1>
+    <h1 class="mb-4">Twój koszyk</h1>
 
     {% if cart_items %}
     <div class="table-responsive">
@@ -35,7 +35,7 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3" class="text-end fs-5"><strong>Suma całkowita:</strong></td>
+                    <td colspan="3" class="text-end fs-5"><strong>Do zapłaty:</strong></td>
                     <td class="text-end fs-5"><strong>{{ "%.2f"|format(total_price) }} zł</strong></td>
                     <td></td>
                 </tr>

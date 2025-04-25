@@ -1,15 +1,15 @@
 {% extends "layout.html" %}
-{% block title %}Edytuj Danie{% endblock %}
+{% block title %}Edytuj danie{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Edytuj Danie: {{ dish.Name }}</h1>
+    <h1 class="mb-4">Edytuj danie: {{ dish.Name }}</h1>
 
     <form method="POST" action="{{ url_for('edit_dish', dish_id=dish.DishID) }}" enctype="multipart/form-data">
 
         <div class="card mb-4">
             <div class="card-header">
-                Dane Dania
+                Dane dania
             </div>
             <div class="card-body">
                  <div class="row g-3 mb-3">
@@ -59,7 +59,7 @@
         <div class="d-flex justify-content-between">
             {% set redirect_url = url_for('manage_dishes', restaurant_id=dish.RestaurantID) if dish.RestaurantID else url_for('manage_dishes') %}
             <a href="{{ redirect_url }}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-1"></i> Anuluj i wróć</a>
-            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill me-2"></i>Zapisz Zmiany</button>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill me-2"></i>Zapisz zmiany</button>
         </div>
     </form>
 

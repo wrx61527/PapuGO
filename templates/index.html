@@ -1,9 +1,8 @@
 {% extends "layout.html" %}
-{% block title %}Znajdź Restaurację - PapuGO{% endblock %}
+{% block title %}Znajdź restaurację - PapuGO{% endblock %}
 
 {% block content %}
-    {# Zaktualizowany baner z powtarzalnym tłem poziomym #}
-    <div class="p-4 mb-4 bg-light text-dark rounded-3 shadow-sm border border-secondary" style="background-image: url('{{ url_for('static', filename='banner.jpg') }}'); background-repeat: repeat-x; background-position: center bottom; background-color: rgba(248, 249, 250, 0.75); background-blend-mode: lighten;"> {# Usunięto background-size: cover; dodano background-repeat: repeat-x; #}
+<div class="p-4 mb-4 rounded-3 shadow-sm border" style="background-image: url({{ url_for('static', filename='banner.png') }});">
         <div class="container-fluid py-3">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="display-6 fw-bold">
@@ -61,7 +60,6 @@
          </div>
     {% endif %}
 
-    {# Style animacji i hover (bez zmian) #}
     <style>
         @keyframes fadeInSlideUp {
             from {

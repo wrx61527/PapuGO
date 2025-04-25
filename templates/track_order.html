@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-3">Szczegóły Zamówienia #{{ order.OrderID }}</h1>
+    <h1 class="mb-3">Szczegóły zamówienia #{{ order.OrderID }}</h1>
 
     <div class="card shadow-sm mb-4">
         <div class="card-header fs-5">
@@ -13,7 +13,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <p><strong>Data złożenia:</strong> {{ order.OrderDate.strftime('%Y-%m-%d %H:%M:%S') if order.OrderDate else '-' }}</p>
-                    <p><strong>Suma całkowita:</strong> {{ "%.2f"|format(order.TotalPrice) }} zł</p>
+                    <p><strong>Do zapłaty:</strong> {{ "%.2f"|format(order.TotalPrice) }} zł</p>
                 </div>
                 <div class="col-md-6">
                     <p><strong>Status:</strong>

@@ -1,9 +1,9 @@
 {% extends "layout.html" %}
-{% block title %}Edytuj Użytkownika{% endblock %}
+{% block title %}Edytuj użytkownika{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Edytuj Użytkownika: {{ user.Username }} (ID: {{ user.UserID }})</h1>
+    <h1 class="mb-4">Edytuj użytkownika: {{ user.Username }} (ID: {{ user.UserID }})</h1>
 
     <form method="POST" action="{{ url_for('edit_user', user_id=user.UserID) }}">
         <div class="card shadow-sm">

@@ -1,16 +1,16 @@
 {% extends "layout.html" %}
-{% block title %}Edytuj Restaurację{% endblock %}
+{% block title %}Edytuj restaurację{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Edytuj Restaurację: {{ restaurant.Name }}</h1>
+    <h1 class="mb-4">Edytuj restaurację: {{ restaurant.Name }}</h1>
 
     <form method="POST" action="{{ url_for('edit_restaurant', restaurant_id=restaurant.RestaurantID) }}" enctype="multipart/form-data">
         <input type="hidden" name="action" value="edit">
 
         <div class="card mb-4 shadow-sm">
             <div class="card-header">
-                Dane Restauracji
+                Dane restauracji
             </div>
             <div class="card-body">
                 <div class="row g-3 mb-3">
@@ -23,7 +23,6 @@
                         <input type="text" class="form-control" id="cuisine" name="cuisine" value="{{ restaurant.CuisineType if restaurant.CuisineType }}">
                     </div>
                     <div class="col-md-3">
-                        {# Przywrócone standardowe pole input #}
                         <label for="rest_image" class="form-label">Zmień zdjęcie restauracji</label>
                         <input class="form-control" type="file" id="rest_image" name="image" accept="image/png, image/jpeg, image/gif">
                         <div class="mt-2">
@@ -67,5 +66,4 @@
     </form>
 
 </div>
-{# Usunięto style CSS i skrypt JS dla Drag & Drop (jeśli były dodane) #}
 {% endblock %}

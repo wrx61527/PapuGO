@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Przeglądaj Zamówienia{% endblock %}
+{% block title %}Przeglądaj zamówienia{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -10,7 +10,7 @@
         <table class="table table-striped table-hover">
             <thead>
                 <tr>
-                    <th>ID Zamówienia</th>
+                    <th>Numer zamówienia</th>
                     <th>Użytkownik</th>
                     <th>Data zamówienia</th>
                     <th>Suma (zł)</th>
@@ -61,6 +61,6 @@
     </div>
     {% endif %}
 
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Powrót do Panelu Admina</a>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Powrót do panelu admina</a>
 </div>
 {% endblock %}

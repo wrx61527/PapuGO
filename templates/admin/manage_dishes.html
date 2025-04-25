@@ -1,9 +1,9 @@
 {% extends "layout.html" %}
-{% block title %}Zarządzaj Daniami{% endblock %}
+{% block title %}Zarządzaj daniami{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Zarządzaj Daniami</h1>
+    <h1 class="mb-4">Zarządzaj daniami</h1>
 
     <form method="GET" action="{{ url_for('manage_dishes') }}" class="mb-4">
         <label for="restaurant_select" class="form-label">Wybierz restaurację, aby zarządzać jej daniami:</label>
@@ -44,7 +44,6 @@
                      </div>
                      <div class="row g-3 mb-3">
                          <div class="col-md-11">
-                             {# Przywrócone standardowe pole input #}
                              <label for="dish_image" class="form-label">Zdjęcie dania (opcjonalne)</label>
                              <input class="form-control" type="file" id="dish_image" name="image" accept="image/png, image/jpeg, image/gif">
                          </div>
@@ -114,7 +113,6 @@
         </div>
     {% endif %}
 
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Powrót do Panelu Admina</a>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Powrót do panelu admina</a>
 </div>
-{# Usunięto style CSS i skrypt JS dla Drag & Drop (jeśli były dodane) #}
 {% endblock %}

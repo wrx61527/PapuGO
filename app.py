@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 import os
 import psycopg2
-import psycopg2.extras # Dla DictCursor
+import psycopg2.extras 
 import uuid
 import logging
 from functools import wraps
@@ -9,8 +8,6 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 # Dodajemy obsługę błędów HTTP (np. 403 Forbidden)
 from werkzeug.exceptions import Forbidden, NotFound
-# Dodajemy narzędzia do hashowania haseł (BARDZO WAŻNE!)
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, session,
@@ -23,8 +20,7 @@ from botocore.exceptions import ClientError
 load_dotenv()
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'ustaw-bezpieczny-klucz-w-env!') # ZMIEŃ TO!
-
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # --- Konfiguracja AWS S3 ---
@@ -54,7 +50,7 @@ def get_db_connection():
         db_host = os.environ.get('DB_HOST')
         db_name = os.environ.get('DB_NAME')
         db_user = os.environ.get('DB_USER')
-        db_password = os.environ.get('DB_PASSWORD') # Bezpieczniej z Secrets Manager!
+        db_password = os.environ.get('DB_PASSWORD') 
         db_port = os.environ.get('DB_PORT', '5432')
         required_db_vars = {'DB_HOST': db_host, 'DB_NAME': db_name, 'DB_USER': db_user, 'DB_PASSWORD': db_password}
         missing_vars = [k for k, v in required_db_vars.items() if not v]
@@ -129,7 +125,6 @@ def admin_required(f):
 
 @app.route('/')
 def index():
-    # ... (bez zmian w logice pobierania) ...
     conn = get_db_connection()
     restaurants_display = []
     if not conn: return render_template('index.html', restaurants=restaurants_display)
@@ -151,7 +146,7 @@ def login():
     if request.method == 'POST':
         action = request.form.get('action')
         username = request.form.get('username')
-        password = request.form.get('password') # Hasło w plaintext!
+        password = request.form.get('password') 
 
         if not username or not password:
             flash('Nazwa użytkownika i hasło są wymagane.', 'warning')
@@ -166,9 +161,7 @@ def login():
                 cursor.execute('SELECT "UserID", "Username", "IsAdmin", "Password" FROM "Users" WHERE "Username" = %s', (username,))
                 user_row = row_to_dict(cursor, cursor.fetchone())
 
-                # !! BARDZO WAŻNE: ZASTOSUJ TUTAJ check_password_hash !!
-                # if user_row and check_password_hash(user_row['Password'], password):
-                if user_row and user_row['Password'] == password: # Oryginalna, NIEBEZPIECZNA wersja
+                if user_row and user_row['Password'] == password: 
                     session['user_id'] = user_row['UserID']
                     session['username'] = user_row['Username']
                     session['is_admin'] = user_row['IsAdmin']
@@ -185,11 +178,7 @@ def login():
                     flash('Nieprawidłowa nazwa użytkownika lub hasło.', 'danger')
 
             elif action == 'register':
-                # !! BARDZO WAŻNE: Zahashuj hasło PRZED zapisem do bazy !!
-                # hashed_password = generate_password_hash(password)
-                # cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, hashed_password))
                 try:
-                    # Oryginalna, NIEBEZPIECZNA wersja:
                     cursor.execute('INSERT INTO "Users" ("Username", "Password") VALUES (%s, %s)', (username, password))
                     conn.commit()
                     app.logger.info(f"Zarejestrowano: '{username}'.")
@@ -218,7 +207,6 @@ def logout():
 
 @app.route('/restaurant/<int:restaurant_id>')
 def restaurant_detail(restaurant_id):
-    # ... (bez zmian w logice pobierania, URL S3 są w danych) ...
     conn = get_db_connection()
     restaurant_display = None; dishes_display = []
     if not conn: return redirect(url_for('index'))
@@ -240,7 +228,6 @@ def restaurant_detail(restaurant_id):
 
 @app.route('/search')
 def search():
-    # ... (bez zmian w logice pobierania, URL S3 są w danych) ...
     query = request.args.get('query', '').strip()
     restaurants_display = []
     if not query: return render_template('index.html', restaurants=restaurants_display, search_query=query)
@@ -262,8 +249,7 @@ def search():
         if conn and not conn.closed: conn.close()
     return render_template('index.html', restaurants=restaurants_display, search_query=query)
 
-# --- Koszyk (bez zmian w logice dodawania/usuwania/widoku) ---
-# ... (kod dla add_to_cart, view_cart, remove_from_cart bez zmian) ...
+# --- Koszyk ---
 @app.route('/cart/add/<int:dish_id>', methods=['POST'])
 def add_to_cart(dish_id):
     if 'user_id' not in session: flash('Musisz być zalogowany.', 'warning'); return redirect(url_for('login'))
@@ -324,7 +310,7 @@ def remove_from_cart(dish_id):
     else: flash('Tego produktu nie ma w koszyku.', 'warning')
     return redirect(url_for('view_cart'))
 
-# --- NOWY Przepływ Płatności i Zamówienia ---
+# --- Przepływ Płatności i Zamówienia ---
 
 @app.route('/payment', methods=['GET'])
 def payment_page():
@@ -404,10 +390,9 @@ def place_order():
 @app.route('/order_confirmation/<int:order_id>')
 def order_confirmation(order_id):
      if 'user_id' not in session: flash('Zaloguj się.', 'warning'); return redirect(url_for('login'))
-     # Można dodać sprawdzenie czy order_id należy do zalogowanego użytkownika
      return render_template('order_confirmation.html', order_id=order_id)
 
-# --- NOWE Śledzenie Zamówień Użytkownika ---
+# --- Śledzenie Zamówień Użytkownika ---
 
 @app.route('/orders')
 def my_orders():
@@ -468,9 +453,6 @@ def track_order_detail(order_id):
             return redirect(url_for('my_orders'))
         if order_details['UserID'] != user_id and not session.get('is_admin'):
             flash('Nie masz uprawnień, aby zobaczyć to zamówienie.', 'danger')
-            # Można użyć abort(403) zamiast flash/redirect
-            # from werkzeug.exceptions import Forbidden
-            # abort(Forbidden("Nie masz uprawnień do tego zamówienia."))
             return redirect(url_for('my_orders'))
 
         # Pobierz pozycje zamówienia, dołączając dane dań
@@ -483,9 +465,8 @@ def track_order_detail(order_id):
         cursor.execute(sql_items, (order_id,))
         order_items = rows_to_dicts(cursor, cursor.fetchall())
 
-    except Forbidden as e: # Obsługa abort(403) jeśli użyto
+    except Forbidden as e: # Obsługa abort(403) 
          app.logger.warning(f"Odmowa dostępu (403) dla UserID {user_id} do zamówienia ID {order_id}")
-         # Flash już ustawiony przez abort, lub można go ustawić tutaj
          return redirect(url_for('my_orders'))
     except Exception as e:
         app.logger.error(f"Błąd pobierania szczegółów zamówienia ID {order_id}: {e}")
@@ -505,8 +486,7 @@ def track_order_detail(order_id):
 def admin_dashboard():
     return render_template('admin/admin_dashboard.html')
 
-# --- Zarządzanie Restauracjami (bez zmian) ---
-# ... (kod dla manage_restaurants, edit_restaurant bez zmian) ...
+# --- Zarządzanie Restauracjami ---
 @app.route('/admin/restaurants', methods=['GET', 'POST'])
 @admin_required
 def manage_restaurants():
@@ -613,8 +593,7 @@ def edit_restaurant(restaurant_id):
         if cursor: cursor.close();
         if conn and not conn.closed: conn.close()
 
-# --- Zarządzanie Daniami (bez zmian) ---
-# ... (kod dla manage_dishes, edit_dish bez zmian) ...
+# --- Zarządzanie Daniami ---
 @app.route('/admin/dishes', methods=['GET', 'POST'])
 @app.route('/admin/dishes/<int:restaurant_id>', methods=['GET', 'POST'])
 @admin_required
@@ -770,8 +749,6 @@ def manage_users():
                     if user_to_delete_data and user_to_delete_data['IsAdmin'] and admin_count <= 1:
                         flash('Nie można usunąć ostatniego administratora.', 'danger')
                     else:
-                        # Można dodać logikę usuwania/anonimizacji zamówień użytkownika
-                        # Dla uproszczenia na razie tylko usuwamy użytkownika
                         cursor.execute('DELETE FROM "Users" WHERE "UserID" = %s', (user_id_to_delete,))
                         deleted_count = cursor.rowcount
                         conn.commit()
@@ -799,7 +776,6 @@ def manage_users():
     # Metoda GET - wyświetlanie listy użytkowników
     users_display = []
     try:
-        # Otwórz nowy kursor jeśli poprzedni został zamknięty lub nie istniał
         if cursor is None or cursor.closed:
              cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cursor.execute('SELECT "UserID", "Username", "IsAdmin" FROM "Users" ORDER BY "Username"')
@@ -835,7 +811,6 @@ def edit_user(user_id):
         # Obsługa POST (zapis zmian)
         if request.method == 'POST':
             new_username = request.form.get('username', '').strip()
-            # 'is_admin' checkbox zwróci 'on' jeśli zaznaczony, inaczej nie będzie w form
             is_admin_form = request.form.get('is_admin') == 'on'
             current_user_id = session.get('user_id')
 
@@ -848,7 +823,6 @@ def edit_user(user_id):
                  flash('Nie można odebrać uprawnień ostatniemu administratorowi.', 'danger')
                  return render_template('admin/edit_user.html', user=user)
             # Sprawdzenie, czy nie próbujemy edytować własnego konta admina w sposób, który by nas zablokował
-            # (np. odebranie sobie uprawnień admina)
             if user_id == current_user_id and user['IsAdmin'] and not is_admin_form:
                  flash('Nie możesz odebrać uprawnień administratora samemu sobie.', 'danger')
                  return render_template('admin/edit_user.html', user=user)
@@ -870,9 +844,6 @@ def edit_user(user_id):
                 conn.commit()
                 flash(f'Dane użytkownika "{new_username}" zostały zaktualizowane.', 'success')
                 app.logger.info(f"Admin UserID {current_user_id} updated UserID {user_id}. New data: username={new_username}, is_admin={is_admin_form}")
-
-                # Jeśli admin edytował własne uprawnienia (np. login), zaktualizuj sesję?
-                # Na razie pomijamy dla uproszczenia, ale w realnej aplikacji warto rozważyć
 
                 # Zamknij zasoby przed przekierowaniem
                 if cursor: cursor.close()
@@ -900,11 +871,10 @@ def edit_user(user_id):
         if conn and not conn.closed: conn.close()
 
 
-# --- Zarządzanie Zamówieniami (bez zmian) ---
+# --- Zarządzanie Zamówieniami ---
 @app.route('/admin/orders', methods=['GET', 'POST'])
 @admin_required
 def view_orders():
-    # ... (kod bez zmian) ...
     conn = get_db_connection();
     if not conn: flash('Błąd połączenia z DB.', 'danger'); return redirect(url_for('admin_dashboard'))
     cursor = None
@@ -935,9 +905,6 @@ def view_orders():
     finally:
          if cursor: cursor.close();
          if conn and not conn.closed: conn.close()
-
-# --- Serwowanie plików statycznych ---
-# Trasa /uploads nie jest już potrzebna
 
 # --- Uruchomienie Aplikacji ---
 if __name__ == '__main__':

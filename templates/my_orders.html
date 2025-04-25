@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Moje Zamówienia</h1>
+    <h1 class="mb-4">Moje zamówienia</h1>
 
     {% if orders %}
     <div class="list-group shadow-sm">
@@ -24,14 +24,14 @@
                     {{ order.Status }}
                 </span>
             </p>
-            <small>Suma: {{ "%.2f"|format(order.TotalPrice) }} zł</small>
+            <small>Do zapłaty: {{ "%.2f"|format(order.TotalPrice) }} zł</small>
         </a>
         {% endfor %}
     </div>
     {% else %}
      <div class="alert alert-info" role="alert">
-        Nie masz jeszcze żadnych złożonych zamówień.
-        <a href="{{ url_for('index') }}" class="alert-link">Przeglądaj restauracje</a>!
+        Nie złoyłeś jeszcze żadnych zamówień.
+        <a href="{{ url_for('index') }}" class="alert-link">Wyszukaj restaurację</a>!
     </div>
     {% endif %}
 </div>
