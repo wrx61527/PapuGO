@@ -2,42 +2,44 @@
 {% block title %}Znajdź Restaurację - PapuGO{% endblock %}
 
 {% block content %}
-    {# Zmodyfikowany baner z tłem i ikoną zamiast przycisku tekstowego #}
-    <div class="p-4 mb-4 bg-success-subtle text-success-emphasis rounded-3 shadow-sm border border-success-subtle" style="background-image: url('{{ url_for('static', filename='banner.jpg') }}'); background-size: cover; background-position: center; background-color: rgba(204, 231, 213, 0.8); background-blend-mode: lighten;">
+    {# Baner (bez zmian w stosunku do poprzedniej wersji) #}
+    <div class="p-4 mb-4 bg-light text-dark rounded-3 shadow-sm border border-secondary" style="background-image: url('{{ url_for('static', filename='banner.jpg') }}'); background-size: cover; background-position: center bottom; background-color: rgba(248, 249, 250, 0.75); background-blend-mode: lighten;">
         <div class="container-fluid py-3">
             <div class="d-flex justify-content-between align-items-center">
-                <h1 class="display-6 fw-bold" style="color: #0a3622;"> {# Ciemniejszy tekst dla kontrastu #}
+                <h1 class="display-6 fw-bold">
                     {% if search_query %}Wyniki dla: "{{ search_query }}"{% else %}Zamów jedzenie z najlepszych restauracji!{% endif %}
                 </h1>
-                {# Przycisk zastąpiony ikoną #}
-                <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#bannerCollapseContent" aria-expanded="true" aria-controls="bannerCollapseContent" style="border-color: #0a3622;"> {# Ciemniejsza ramka przycisku #}
-                    <i class="bi bi-chevron-up" style="color: #0a3622;"></i> {# Ciemniejsza ikona #}
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#bannerCollapseContent" aria-expanded="true" aria-controls="bannerCollapseContent">
+                    <i class="bi bi-chevron-up"></i>
                 </button>
             </div>
              <div class="collapse show" id="bannerCollapseContent">
-                <p class="col-md-8 fs-5 mt-3" style="color: #0a3622;"> {# Ciemniejszy tekst dla kontrastu #}
+                <p class="col-md-8 fs-5 mt-3">
                     Wpisz nazwę restauracji, rodzaj kuchni lub miasto w polu wyszukiwania powyżej, aby znaleźć coś dla siebie.
                 </p>
                  {% if search_query and not restaurants %}
-                 <a href="{{ url_for('index') }}" class="btn btn-success btn-lg mt-2" type="button">Wyczyść wyszukiwanie</a>
+                 <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg mt-2" type="button">Wyczyść wyszukiwanie</a>
                  {% endif %}
             </div>
       </div>
     </div>
 
     {% if restaurants %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"> {% for restaurant in restaurants %}
-            <div class="col">
+        {# Dodano klasę 'restaurant-grid' do kontenera kart dla stylów animacji #}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 restaurant-grid">
+            {% for restaurant in restaurants %}
+            {# Dodano styl inline dla animation-delay obliczanego na podstawie indeksu pętli #}
+            <div class="col restaurant-card-col" style="animation-delay: {{ loop.index0 * 0.08 }}s;">
                 <a href="{{ url_for('restaurant_detail', restaurant_id=restaurant.RestaurantID) }}" class="text-decoration-none">
-                    <div class="card restaurant-card shadow-sm">
+                    <div class="card restaurant-card h-100 shadow-sm">
                         {% if restaurant.ImageURL %}
-                            <img src="{{ restaurant.ImageURL }}" class="card-img-top" alt="{{ restaurant.Name }}">
+                            <img src="{{ restaurant.ImageURL }}" class="card-img-top" alt="{{ restaurant.Name }}" style="height: 200px; object-fit: cover;">
                         {% else %}
-                            {# Zakładamy, że placeholder jest w static #}
-                            <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" class="card-img-top" alt="Brak zdjęcia">
+                            <img src="{{ url_for('static', filename='placeholder_restaurant.png') }}" class="card-img-top" alt="Brak zdjęcia" style="height: 200px; object-fit: contain; opacity: 0.5;">
                         {% endif %}
-                        <div class="card-body">
-                            <div> <h5 class="card-title mb-1">{{ restaurant.Name }}</h5>
+                        <div class="card-body d-flex flex-column">
+                            <div class="flex-grow-1">
+                                <h5 class="card-title mb-1">{{ restaurant.Name }}</h5>
                                 {% if restaurant.CuisineType %}
                                 <p class="card-text text-muted mb-2"><small><i class="bi bi-tags-fill me-1"></i>{{ restaurant.CuisineType }}</small></p>
                                 {% endif %}
@@ -60,4 +62,45 @@
            Obecnie nie ma żadnych restauracji w systemie. Administrator wkrótce je doda!
          </div>
     {% endif %}
+
+    {# Zaktualizowany styl dla kart restauracji + Dodano style animacji #}
+    <style>
+        /* Definicja animacji pojawiania się */
+        @keyframes fadeInSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px); /* Startuje lekko niżej */
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0); /* Kończy w normalnej pozycji */
+            }
+        }
+
+        /* Styl dla kolumny zawierającej kartę - inicjalnie ukryta */
+        .restaurant-grid .restaurant-card-col {
+            opacity: 0; /* Startuje jako niewidoczna */
+            /* Zastosowanie animacji */
+            animation-name: fadeInSlideUp;
+            animation-duration: 0.5s; /* Czas trwania animacji */
+            animation-timing-function: ease-out; /* Funkcja przyspieszenia */
+            animation-fill-mode: forwards; /* Utrzymuje stan końcowy animacji */
+            /* animation-delay zostanie ustawiony inline w pętli Jinja */
+        }
+
+        /* Style dla efektu hover (bez zmian) */
+        .restaurant-card img.card-img-top {
+            transition: transform 0.3s ease-in-out;
+        }
+        .restaurant-card:hover img.card-img-top {
+            transform: scale(1.05);
+        }
+        .restaurant-card {
+             transition: box-shadow 0.3s ease-in-out;
+        }
+        .restaurant-card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
+    </style>
+
 {% endblock %}
