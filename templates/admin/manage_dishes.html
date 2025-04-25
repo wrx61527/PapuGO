@@ -43,19 +43,17 @@
                              <input type="number" step="0.01" class="form-control" id="dish_price" name="price" required placeholder="np. 19.99">
                          </div>
                      </div>
-                     <div class="row g-3 mb-3 align-items-end"> {# Użyto align-items-end dla wyrównania #}
-                         <div class="col-md-6"> {# Zmieniono szerokość kolumny #}
-                             <label for="dish_image_input" class="form-label">Zdjęcie dania (opcjonalne)</label>
+                     <div class="row g-3 mb-3 align-items-end"> {# Dodano align-items-end dla lepszego wyrównania #}
+                         <div class="col-md-9">
+                             <label for="add_dish_image_input" class="form-label">Zdjęcie dania (opcjonalne)</label>
                              {# Strefa Drag & Drop #}
                              <div id="add-dish-drop-zone" class="drop-zone">
                                  <span class="drop-zone__prompt">Przeciągnij plik tutaj lub kliknij, aby wybrać</span>
-                                 <input class="form-control drop-zone__input" type="file" id="dish_image_input" name="image" accept="image/png, image/jpeg, image/gif">
+                                 <input class="form-control drop-zone__input" type="file" id="add_dish_image_input" name="image" accept="image/png, image/jpeg, image/gif">
                              </div>
                          </div>
-                         <div class="col-md-4"> {# Dodano pustą kolumnę dla lepszego układu #}
-                         </div>
-                         <div class="col-md-2"> {# Przycisk w osobnej kolumnie #}
-                             <button type="submit" class="btn btn-success w-100">Dodaj</button>
+                         <div class="col-md-3"> {# Zmieniono szerokość kolumny przycisku #}
+                             <button type="submit" class="btn btn-success w-100"><i class="bi bi-plus-circle-fill me-1"></i> Dodaj Danie</button>
                          </div>
                      </div>
                      <small class="text-muted">* Pola nazwa i cena są wymagane. Dozwolone typy obrazków: png, jpg, jpeg, gif.</small>
@@ -126,8 +124,9 @@
 {# Style CSS dla strefy Drag & Drop (takie same jak wcześniej) #}
 <style>
 .drop-zone {
-  height: 100px;
-  padding: 15px;
+  /* Dostosowano wysokość dla tego formularza */
+  height: 80px;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,7 +179,6 @@
 .drop-zone__prompt {
     display: block;
 }
-/* Ukryj prompt jeśli jest miniaturka */
 .drop-zone:has(.drop-zone__thumb) .drop-zone__prompt {
     display: none;
 }
@@ -190,14 +188,6 @@
 // Skrypt JS (taki sam jak wcześniej)
 document.querySelectorAll(".drop-zone__input").forEach((inputElement) => {
   const dropZoneElement = inputElement.closest(".drop-zone");
-
-  // Jeśli istnieje już miniaturka (np. przy edycji - choć tu nie dotyczy), ukryj prompt
-  if (dropZoneElement.querySelector(".drop-zone__thumb")) {
-      const promptElement = dropZoneElement.querySelector(".drop-zone__prompt");
-      if (promptElement) {
-          promptElement.style.display = "none";
-      }
-  }
 
   dropZoneElement.addEventListener("click", (e) => {
     if (e.target !== inputElement) {
